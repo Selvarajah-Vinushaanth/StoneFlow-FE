@@ -154,6 +154,8 @@ export const jobsApi = {
     api.post(`/jobs/${jobId}/steps/${stepId}/timer/reset`),
   getActiveTimers: () =>
     api.get<{ success: boolean; data: WorkflowStep[] }>('/jobs/timers/active'),
+  raiseIssue: (jobId: string, stepId: string, type: 'ISSUE' | 'HELP', details?: string, adminId?: string) =>
+    api.post(`/jobs/${jobId}/steps/${stepId}/raise`, { type, details, adminId }),
 };
 
 export const messagesApi = {

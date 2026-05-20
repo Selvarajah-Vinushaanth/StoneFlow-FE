@@ -11,6 +11,7 @@ import { dashboardApi, DashboardData, Job, AuditLog, AlertStep } from '@/lib/api
 import StatsCard from '@/components/StatsCard';
 import Header from '@/components/Header';
 import { StatusBadge, PriorityBadge } from '@/components/Badges';
+import { useWebSocket } from '@/hooks/useWebSocket';
 
 const ACTIVE_JOBS_PREVIEW_COUNT = 3;
 
@@ -66,6 +67,13 @@ export default function DashboardPage() {
     const interval = setInterval(load, 30000);
     return () => clearInterval(interval);
   }, [load]);
+
+  // Refresh instantly when a worker sends ISSUE or HELP via WhatsApp
+  useWebSocket((msg) => {
+    if (msg.event === 'step_issue' || msg.event === 'step_help' || msg.event === 'issue_resolved') {
+      load();
+    }
+  });
 
   useEffect(() => {
     if (replyAlertId) replyInputRef.current?.focus();

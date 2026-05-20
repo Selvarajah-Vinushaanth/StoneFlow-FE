@@ -164,6 +164,27 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     }
   };
 
+  const handleRaiseIssue = async (stepId: string, type: 'ISSUE' | 'HELP', details: string) => {
+    if (!job) return;
+    let adminId: string | undefined;
+    try { adminId = JSON.parse(localStorage.getItem('auth_user') ?? '{}').id ?? undefined; } catch { /* ignore */ }
+    try {
+      await jobsApi.raiseIssue(job.id, stepId, type, details, adminId);
+      await load();
+    } catch {
+      // Demo mode: update locally
+      setJob(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          workflowSteps: prev.workflowSteps.map(s =>
+            s.id === stepId ? { ...s, status: (type === 'ISSUE' ? 'ISSUE' : 'HELP_NEEDED') as 'ISSUE' | 'HELP_NEEDED', issueText: details } : s
+          ),
+        };
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -295,6 +316,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                     onCompleteStep={handleCompleteStep}
                     onSetTimer={handleSetTimer}
                     onResetTimer={handleResetTimer}
+                    onRaiseIssue={handleRaiseIssue}
                     isAdmin
                   />
                 )}

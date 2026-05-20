@@ -22,6 +22,7 @@ interface WorkflowTimelineProps {
   onCompleteStep?: (stepId: string) => void;
   onSetTimer?: (stepId: string, minutes: number) => void;
   onResetTimer?: (stepId: string) => void;
+  onRaiseIssue?: (stepId: string, type: 'ISSUE' | 'HELP', details: string) => void;
   isAdmin?: boolean;
 }
 
@@ -164,7 +165,63 @@ function TimerSetter({ step, onSetTimer, onResetTimer }: {
   );
 }
 
-export default function WorkflowTimeline({ steps, onCompleteStep, onSetTimer, onResetTimer, isAdmin }: WorkflowTimelineProps) {
+// ─── Raise Issue / Help panel (admin only) ────────────────────────────────────
+function RaiseIssuePanel({ step, onRaiseIssue }: {
+  step: WorkflowStep;
+  onRaiseIssue: (stepId: string, type: 'ISSUE' | 'HELP', details: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [type, setType] = useState<'ISSUE' | 'HELP'>('ISSUE');
+  const [details, setDetails] = useState('');
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="text-xs flex items-center gap-1 px-2 py-0.5 border border-dashed border-red-300 text-red-400 rounded-lg hover:border-red-500 hover:text-red-600 mt-1.5"
+      >
+        <AlertTriangle size={11} /> Raise Issue / Help
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-xl space-y-2">
+      <div className="flex gap-2">
+        <button
+          onClick={() => setType('ISSUE')}
+          className={`text-xs px-2.5 py-1 rounded-lg font-medium border transition-colors ${type === 'ISSUE' ? 'bg-red-500 text-white border-red-500' : 'border-red-300 text-red-500 hover:bg-red-100'}`}
+        >
+          ⚠️ Issue
+        </button>
+        <button
+          onClick={() => setType('HELP')}
+          className={`text-xs px-2.5 py-1 rounded-lg font-medium border transition-colors ${type === 'HELP' ? 'bg-orange-500 text-white border-orange-500' : 'border-orange-300 text-orange-500 hover:bg-orange-100'}`}
+        >
+          🆘 Help
+        </button>
+      </div>
+      <input
+        type="text"
+        value={details}
+        onChange={e => setDetails(e.target.value)}
+        placeholder={type === 'ISSUE' ? 'Describe the issue…' : 'Describe what help is needed…'}
+        className="w-full text-xs border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-red-400"
+      />
+      <div className="flex gap-1.5">
+        <button
+          onClick={() => { onRaiseIssue(step.id, type, details); setOpen(false); setDetails(''); }}
+          className="text-xs px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 font-medium"
+        >
+          Submit
+        </button>
+        <button onClick={() => { setOpen(false); setDetails(''); }} className="text-xs text-slate-400 hover:text-slate-600 px-2">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+export default function WorkflowTimeline({ steps, onCompleteStep, onSetTimer, onResetTimer, onRaiseIssue, isAdmin }: WorkflowTimelineProps) {
   const [alarmStep, setAlarmStep] = useState<string | null>(null);
 
   return (
@@ -244,6 +301,11 @@ export default function WorkflowTimeline({ steps, onCompleteStep, onSetTimer, on
                   {/* Admin timer setter */}
                   {canSetTimer && onSetTimer && onResetTimer && (
                     <TimerSetter step={step} onSetTimer={onSetTimer} onResetTimer={onResetTimer} />
+                  )}
+
+                  {/* Admin raise issue / help */}
+                  {isAdmin && onRaiseIssue && (step.status === 'IN_PROGRESS' || step.status === 'NOTIFIED') && (
+                    <RaiseIssuePanel step={step} onRaiseIssue={onRaiseIssue} />
                   )}
                 </div>
                 {isAdmin && (step.status === 'IN_PROGRESS' || step.status === 'NOTIFIED') && onCompleteStep && (
