@@ -7,6 +7,8 @@ export type WsEvent =
   | 'step_completed'
   | 'step_issue'
   | 'step_help'
+  | 'issue_resolved'
+  | 'timer_expired'
   | 'job_completed';
 
 export interface WsMessage {

@@ -140,8 +140,18 @@ export default function SettingsPage() {
                 </div>
                 <div className="divide-y divide-slate-50">
                   {[
-                    { label: 'Show admin alerts for ISSUE / HELP', desc: 'When off, worker ISSUE and HELP updates stay on the job but do not appear in dashboard alerts or trigger admin WhatsApp alerts.', val: notifyAdmin, set: setNotifyAdmin },
-                    { label: 'Auto-start workflow on job creation', desc: 'When on, a new job starts immediately after creation and the first assigned worker is notified. Manual Start Workflow is not needed.', val: autoStart, set: setAutoStart },
+                    {
+                      label: 'Admin Alerts & WhatsApp Notifications',
+                      desc: 'ON → ISSUE / HELP reports appear in the Alerts panel instantly and a WhatsApp message is sent to admin. OFF → no alerts in dashboard and no WhatsApp sent to admin.',
+                      val: notifyAdmin,
+                      set: setNotifyAdmin,
+                    },
+                    {
+                      label: 'Auto-start workflow on job creation',
+                      desc: 'When on, a new job starts immediately after creation and the first assigned worker is notified. Manual Start Workflow is not needed.',
+                      val: autoStart,
+                      set: setAutoStart,
+                    },
                   ].map(({ label, desc, val, set }) => (
                     <div key={label} className="flex items-center justify-between gap-4 px-6 py-4">
                       <div>

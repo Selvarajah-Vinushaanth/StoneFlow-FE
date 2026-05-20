@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, Play, RefreshCw, Clock, CheckCircle2, AlertTriangle,
   Phone, User, Calendar, Layers, Camera, MessageSquare, Briefcase,
-  ChevronRight, HelpCircle,
+  ChevronRight, HelpCircle, Timer,
 } from 'lucide-react';
 import { jobsApi, Job, AuditLog } from '@/lib/api';
 import { StatusBadge, PriorityBadge } from '@/components/Badges';
@@ -64,8 +64,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
-  const [tab, setTab] = useState<'workflow' | 'activity' | 'photos'>('workflow');
-
+  const [tab, setTab] = useState<'workflow' | 'activity' | 'photos' | 'timers'>('workflow');
   const load = useCallback(async () => {
     try {
       const res = await jobsApi.get(id);
@@ -122,6 +121,45 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           steps[idx] = { ...steps[idx], status: 'NOTIFIED' as const };
         }
         return { ...prev, workflowSteps: steps, completedSteps: completedCount };
+      });
+    }
+  };
+
+  const handleSetTimer = async (stepId: string, minutes: number) => {
+    if (!job) return;
+    try {
+      await jobsApi.setTimer(job.id, stepId, minutes);
+      await load();
+    } catch {
+      // Demo: update locally
+      setJob(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          workflowSteps: prev.workflowSteps.map(s =>
+            s.id === stepId
+              ? { ...s, durationMinutes: minutes, timerStartedAt: new Date().toISOString() }
+              : s
+          ),
+        };
+      });
+    }
+  };
+
+  const handleResetTimer = async (stepId: string) => {
+    if (!job) return;
+    try {
+      await jobsApi.resetTimer(job.id, stepId);
+      await load();
+    } catch {
+      setJob(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          workflowSteps: prev.workflowSteps.map(s =>
+            s.id === stepId ? { ...s, durationMinutes: null, timerStartedAt: null } : s
+          ),
+        };
       });
     }
   };
@@ -229,11 +267,12 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
 
             {/* Tabs */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="flex border-b border-slate-200">
+              <div className="flex border-b border-slate-200 overflow-x-auto">
                 {[
                   { key: 'workflow', label: 'Workflow', icon: Layers },
                   { key: 'activity', label: 'Activity Log', icon: Clock },
                   { key: 'photos', label: 'Photos', icon: Camera },
+                  { key: 'timers', label: 'Timers', icon: Timer },
                 ].map(({ key, label, icon: Icon }) => (
                   <button
                     key={key}
@@ -254,6 +293,8 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                   <WorkflowTimeline
                     steps={job.workflowSteps}
                     onCompleteStep={handleCompleteStep}
+                    onSetTimer={handleSetTimer}
+                    onResetTimer={handleResetTimer}
                     isAdmin
                   />
                 )}
@@ -294,6 +335,66 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                     <Camera size={32} className="mx-auto mb-2 opacity-30" />
                     <p className="text-sm">Photo uploads from workers will appear here</p>
                     <p className="text-xs mt-1">Workers send photos via WhatsApp MMS</p>
+                  </div>
+                )}
+                {tab === 'timers' && (
+                  <div className="space-y-3">
+                    <p className="text-xs text-slate-500 flex items-center gap-1.5">
+                      <Timer size={12} /> Set time limits per step. Workers are shown countdowns; admin sees live status here.
+                    </p>
+                    {job.workflowSteps.filter(s => s.status !== 'COMPLETED' && s.status !== 'SKIPPED').length === 0 ? (
+                      <div className="text-center py-8 text-slate-400">
+                        <Timer size={32} className="mx-auto mb-2 opacity-30" />
+                        <p className="text-sm">All steps completed — no active timers</p>
+                      </div>
+                    ) : (
+                      job.workflowSteps
+                        .filter(s => s.status !== 'COMPLETED' && s.status !== 'SKIPPED')
+                        .map(step => {
+                          const hasTimer = step.timerStartedAt && step.durationMinutes;
+                          return (
+                            <div key={step.id} className={`rounded-xl border px-4 py-3 ${hasTimer ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white'}`}>
+                              <div className="flex items-start gap-3">
+                                <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 flex-shrink-0 mt-0.5">
+                                  {step.stepNumber}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-semibold text-slate-800 text-sm">{step.name}</p>
+                                  {step.assignedUser && (
+                                    <p className="text-xs text-slate-500">{step.assignedUser.name} · {step.assignedUser.role.replace(/_/g, ' ')}</p>
+                                  )}
+                                  {hasTimer && (
+                                    <div className="mt-1.5 flex items-center gap-2 text-xs text-amber-700">
+                                      <Timer size={12} />
+                                      <span>Started {new Date(step.timerStartedAt!).toLocaleTimeString()} · {step.durationMinutes}min limit</span>
+                                    </div>
+                                  )}
+                                  <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                    {hasTimer ? (
+                                      <button
+                                        onClick={() => handleResetTimer(step.id)}
+                                        className="text-xs px-2.5 py-1 border border-red-300 text-red-600 rounded-lg hover:bg-red-50"
+                                      >
+                                        Clear Timer
+                                      </button>
+                                    ) : (
+                                      [1, 15, 30, 45, 60, 90, 120].map(m => (
+                                        <button
+                                          key={m}
+                                          onClick={() => handleSetTimer(step.id, m)}
+                                          className="text-xs px-2.5 py-1 border border-slate-300 text-slate-600 rounded-lg hover:border-amber-400 hover:text-amber-600 hover:bg-amber-50"
+                                        >
+                                          {m >= 60 ? `${m / 60}h` : `${m}m`}
+                                        </button>
+                                      ))
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                    )}
                   </div>
                 )}
               </div>

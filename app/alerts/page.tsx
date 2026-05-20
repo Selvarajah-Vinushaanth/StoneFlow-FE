@@ -9,6 +9,7 @@ import Link from 'next/link';
 import Header from '@/components/Header';
 import Pagination from '@/components/Pagination';
 import { AlertStep } from '@/lib/api';
+import { useWebSocket } from '@/hooks/useWebSocket';
 
 type Filter = 'ALL' | 'ISSUE' | 'HELP_NEEDED';
 
@@ -47,6 +48,13 @@ export default function AlertsPage() {
     const t = setInterval(load, 30000);
     return () => clearInterval(t);
   }, [load]);
+
+  // Refresh immediately when a worker sends ISSUE or HELP via WhatsApp
+  useWebSocket((msg) => {
+    if (msg.event === 'step_issue' || msg.event === 'step_help' || msg.event === 'issue_resolved') {
+      load();
+    }
+  });
 
   useEffect(() => {
     if (replyAlertId) replyInputRef.current?.focus();
@@ -107,6 +115,25 @@ export default function AlertsPage() {
         showToast(json.data?.workerName ?? alert.assignedUser?.name ?? 'Worker', alert.job.jobNumber, 'resolve');
       }
     } catch { /* ignore */ }
+  }
+
+  async function handleQuickReply(alert: AlertStep, message: string) {
+    setReplySending(true);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/reply-step`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ stepId: alert.id, adminId: getAdminId(), message }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setDismissedAlerts(prev => new Set(prev).add(alert.id));
+        setReplyAlertId(null);
+        showToast(json.data?.workerName ?? alert.assignedUser?.name ?? 'Worker', alert.job.jobNumber, 'reply');
+      }
+    } catch { /* ignore */ }
+    finally { setReplySending(false); }
   }
 
   const visible = alerts.filter(a => !dismissedAlerts.has(a.id));
@@ -308,7 +335,25 @@ export default function AlertsPage() {
 
                         {/* Inline reply box */}
                         {replyAlertId === alert.id && (
-                          <div className="mt-3 space-y-2">
+                          <div className="mt-3 space-y-2.5">
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Quick Reply</p>
+                            <div className="flex flex-wrap gap-2">
+                              {[
+                                { label: '✅ Continue', msg: 'Please continue with the task — we are aware of the situation.' },
+                                { label: '🔍 Will inspect', msg: 'We will come to inspect shortly. Please wait.' },
+                                { label: '📸 Take photos', msg: 'Please take photos of the issue and wait for instructions.' },
+                                { label: '📝 Issue noted', msg: 'Issue noted. Please hold and wait for our response.' },
+                              ].map(({ label, msg }) => (
+                                <button
+                                  key={label}
+                                  onClick={() => handleQuickReply(alert, msg)}
+                                  disabled={replySending}
+                                  className="px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 border border-slate-200 bg-slate-50 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-800 transition-all disabled:opacity-50"
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
                             <div className="flex items-center gap-2">
                               <input
                                 ref={replyInputRef}
@@ -318,8 +363,8 @@ export default function AlertsPage() {
                                   if (e.key === 'Enter') handleAlertReply(alert);
                                   if (e.key === 'Escape') setReplyAlertId(null);
                                 }}
-                                placeholder={`Message to ${alert.assignedUser?.name ?? 'worker'}…`}
-                                className="flex-1 px-3 py-2 text-sm border border-amber-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                                placeholder="Or type a custom message…"
+                                className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
                               />
                               <button
                                 onClick={() => handleAlertReply(alert)}
@@ -333,9 +378,6 @@ export default function AlertsPage() {
                                 <X size={16} />
                               </button>
                             </div>
-                            <p className="text-xs text-slate-400">
-                              Worker will receive this in their language with <strong>DONE / ISSUE / HELP</strong> reply options
-                            </p>
                           </div>
                         )}
                       </div>

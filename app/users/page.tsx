@@ -11,7 +11,8 @@ import Pagination from '@/components/Pagination';
 import { RoleBadge } from '@/components/Badges';
 
 const ROLES: Role[] = [
-  'ADMIN', 'MANAGER', 'CUTTER', 'POLISHER', 'EDGE_FINISHER',
+  'ADMIN', 'MANAGER', 'SALESMAN', 'SITE_SUPERVISOR',
+  'CUTTER', 'POLISHER', 'EDGE_FINISHER',
   'PACKER', 'LOADER', 'INSTALLER', 'QC_INSPECTOR', 'DRIVER', 'WORKER',
 ];
 
@@ -26,6 +27,8 @@ const LANGUAGES: { value: Language; label: string; flag: string }[] = [
 const roleColors: Record<string, string> = {
   ADMIN: 'bg-red-100 text-red-700',
   MANAGER: 'bg-purple-100 text-purple-700',
+  SALESMAN: 'bg-emerald-100 text-emerald-700',
+  SITE_SUPERVISOR: 'bg-violet-100 text-violet-700',
   CUTTER: 'bg-blue-100 text-blue-700',
   POLISHER: 'bg-cyan-100 text-cyan-700',
   EDGE_FINISHER: 'bg-indigo-100 text-indigo-700',

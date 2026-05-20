@@ -13,6 +13,8 @@ import {
   BarChart3,
   LogOut,
   Bell,
+  DollarSign,
+  Timer,
 } from 'lucide-react';
 
 const navItems = [
@@ -21,6 +23,8 @@ const navItems = [
   { href: '/alerts', label: 'Alerts', icon: Bell, alertBadge: true },
   { href: '/users', label: 'Team', icon: Users },
   { href: '/workflows', label: 'Workflow Templates', icon: GitBranch },
+  { href: '/timers', label: 'Timer Monitor', icon: Timer },
+  { href: '/finance', label: 'Finance', icon: DollarSign },
   { href: '/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/messages', label: 'WhatsApp Logs', icon: MessageSquare },
   { href: '/settings', label: 'Settings', icon: Settings },

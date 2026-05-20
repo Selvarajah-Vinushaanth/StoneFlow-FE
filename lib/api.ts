@@ -21,7 +21,8 @@ api.interceptors.request.use((config) => {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type Role =
-  | 'ADMIN' | 'MANAGER' | 'CUTTER' | 'POLISHER' | 'EDGE_FINISHER'
+  | 'ADMIN' | 'MANAGER' | 'SALESMAN' | 'SITE_SUPERVISOR'
+  | 'CUTTER' | 'POLISHER' | 'EDGE_FINISHER'
   | 'PACKER' | 'LOADER' | 'INSTALLER' | 'QC_INSPECTOR' | 'DRIVER' | 'WORKER';
 
 export type Language = 'ENGLISH' | 'BANGLA' | 'MANDARIN' | 'BAHASA_MALAY' | 'TAMIL';
@@ -55,6 +56,8 @@ export interface WorkflowStep {
   completedAt?: string;
   dueAt?: string;
   issueText?: string;
+  durationMinutes?: number | null;
+  timerStartedAt?: string | null;
 }
 
 export interface Job {
@@ -145,6 +148,12 @@ export const jobsApi = {
   start: (id: string) => api.post(`/jobs/${id}/start`),
   completeStep: (jobId: string, stepId: string) =>
     api.post(`/jobs/${jobId}/steps/${stepId}/complete`),
+  setTimer: (jobId: string, stepId: string, durationMinutes: number) =>
+    api.post(`/jobs/${jobId}/steps/${stepId}/timer/start`, { durationMinutes }),
+  resetTimer: (jobId: string, stepId: string) =>
+    api.post(`/jobs/${jobId}/steps/${stepId}/timer/reset`),
+  getActiveTimers: () =>
+    api.get<{ success: boolean; data: WorkflowStep[] }>('/jobs/timers/active'),
 };
 
 export const messagesApi = {

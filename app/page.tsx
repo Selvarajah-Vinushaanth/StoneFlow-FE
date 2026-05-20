@@ -122,6 +122,24 @@ export default function DashboardPage() {
     } catch { /* silently ignore */ }
   }
 
+  async function handleQuickReply(alert: AlertStep, message: string) {
+    setReplySending(true);
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/reply-step`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stepId: alert.id, adminId: getAdminId(), message }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setDismissedAlerts(prev => new Set(prev).add(alert.id));
+        setReplyAlertId(null);
+        showToast(json.data?.workerName ?? alert.assignedUser?.name ?? 'Worker', alert.job.jobNumber, 'reply');
+      }
+    } catch { /* silently ignore */ }
+    finally { setReplySending(false); }
+  }
+
   const stats = data?.stats;
 
   return (
@@ -148,7 +166,7 @@ export default function DashboardPage() {
           </div>
         )}
         {loading ? (
-          <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[...Array(8)].map((_, i) => (
               <div key={i} className="h-28 bg-white rounded-2xl animate-pulse border border-slate-200/80 shadow-sm" />
             ))}
@@ -156,7 +174,7 @@ export default function DashboardPage() {
         ) : (
           <>
             {/* ─── Stats Grid ─── */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <StatsCard label="Total Jobs"    value={stats?.totalJobs     ?? 0} icon={Briefcase}     color="slate"  href="/jobs" />
               <StatsCard label="Active"        value={stats?.activeJobs    ?? 0} icon={PlayCircle}    color="amber"  href="/jobs?status=IN_PROGRESS" />
               <StatsCard label="Completed"     value={stats?.completedJobs ?? 0} icon={CheckCircle2}  color="green"  href="/jobs?status=COMPLETED" />
@@ -323,6 +341,24 @@ export default function DashboardPage() {
                           </p>
                           {replyAlertId === alert.id && (
                             <div className="mt-2.5 space-y-2">
+                              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Quick Reply</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {[
+                                  { label: '✅ Continue', msg: 'Please continue with the task — we are aware of the situation.' },
+                                  { label: '🔍 Will inspect', msg: 'We will come to inspect shortly. Please wait.' },
+                                  { label: '📸 Take photos', msg: 'Please take photos of the issue and wait for instructions.' },
+                                  { label: '📝 Issue noted', msg: 'Issue noted. Please hold and wait for our response.' },
+                                ].map(({ label, msg }) => (
+                                  <button
+                                    key={label}
+                                    onClick={() => handleQuickReply(alert, msg)}
+                                    disabled={replySending}
+                                    className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 border border-slate-200 bg-slate-50 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-800 transition-all disabled:opacity-50"
+                                  >
+                                    {label}
+                                  </button>
+                                ))}
+                              </div>
                               <div className="flex items-center gap-2">
                                 <input
                                   ref={replyInputRef}
@@ -332,8 +368,8 @@ export default function DashboardPage() {
                                     if (e.key === 'Enter') handleAlertReply(alert);
                                     if (e.key === 'Escape') setReplyAlertId(null);
                                   }}
-                                  placeholder={`Message to ${alert.assignedUser?.name ?? 'worker'}…`}
-                                  className="flex-1 px-3 py-2 text-xs border border-amber-300 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder-slate-400"
+                                  placeholder="Or type a custom message…"
+                                  className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 placeholder-slate-400"
                                 />
                                 <button
                                   onClick={() => handleAlertReply(alert)}
@@ -347,9 +383,6 @@ export default function DashboardPage() {
                                   <X size={14} />
                                 </button>
                               </div>
-                              <p className="text-xs text-slate-400 pl-0.5">
-                                Worker receives this with <span className="font-semibold text-slate-600">DONE / ISSUE / HELP</span> options in their language
-                              </p>
                             </div>
                           )}
                         </div>
