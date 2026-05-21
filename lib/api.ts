@@ -168,4 +168,21 @@ export const messagesApi = {
 export const whatsappApi = {
   simulate: (phone: string, message: string) =>
     api.post('/webhooks/simulate', { phone, message }),
+  test: (payload: { phone?: string; userId?: string; message?: string }) =>
+    api.post<{
+      success: boolean;
+      delivery: {
+        status: 'sent' | 'failed' | 'simulated' | 'demo_sent';
+        sid?: string;
+        errorCode?: string | number;
+        errorMessage?: string;
+        to?: string;
+      };
+      config: { from: string; hasSid: boolean; hasToken: boolean };
+    }>('/webhooks/test', payload),
+  config: () =>
+    api.get<{
+      success: boolean;
+      data: { from: string; hasSid: boolean; hasToken: boolean; verifyTokenSet: boolean };
+    }>('/webhooks/config'),
 };

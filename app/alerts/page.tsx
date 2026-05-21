@@ -26,6 +26,8 @@ export default function AlertsPage() {
   const [replySending, setReplySending] = useState(false);
   const [dismissedAlerts, setDismissedAlerts] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<{ workerName: string; jobNumber: string; type: 'reply' | 'resolve' } | null>(null);
+  const [resolveModal, setResolveModal] = useState<AlertStep | null>(null);
+  const [resolving, setResolving] = useState(false);
   const [page, setPage]           = useState(1);
   const replyInputRef = useRef<HTMLInputElement>(null);
 
@@ -94,27 +96,31 @@ export default function AlertsPage() {
     finally { setReplySending(false); }
   }
 
-  async function handleResolveStep(alert: AlertStep) {
+  function handleResolveStep(alert: AlertStep) {
+    setResolveModal(alert);
+  }
+
+  async function confirmResolve() {
+    if (!resolveModal) return;
     const adminId = getAdminId();
     if (!adminId) return;
-    const confirmed = window.confirm(
-      `Resolve the alert for ${alert.assignedUser?.name ?? 'this worker'} on ${alert.job.jobNumber} (${alert.name})? The worker will be notified to continue.`,
-    );
-    if (!confirmed) return;
+    setResolving(true);
     const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/resolve-step`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ stepId: alert.id, adminId }),
+        body: JSON.stringify({ stepId: resolveModal.id, adminId }),
       });
       if (res.ok) {
         const json = await res.json();
-        setDismissedAlerts(prev => new Set(prev).add(alert.id));
+        setDismissedAlerts(prev => new Set(prev).add(resolveModal.id));
         setReplyAlertId(null);
-        showToast(json.data?.workerName ?? alert.assignedUser?.name ?? 'Worker', alert.job.jobNumber, 'resolve');
+        showToast(json.data?.workerName ?? resolveModal.assignedUser?.name ?? 'Worker', resolveModal.job.jobNumber, 'resolve');
+        setResolveModal(null);
       }
     } catch { /* ignore */ }
+    finally { setResolving(false); }
   }
 
   async function handleQuickReply(alert: AlertStep, message: string) {
@@ -426,6 +432,63 @@ export default function AlertsPage() {
 
         </div>
       </main>
+
+      {/* ─── Resolve Confirmation Modal ─── */}
+      {resolveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 animate-fade-in">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0">
+                <CheckCircle2 size={20} className="text-green-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800 text-base">Resolve Alert</h3>
+                <p className="text-xs text-slate-500">This will notify the worker to continue</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 mb-5 space-y-1.5">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500">Worker</span>
+                <span className="font-semibold text-slate-800">{resolveModal.assignedUser?.name ?? '—'}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500">Job</span>
+                <span className="font-semibold text-slate-800">{resolveModal.job.jobNumber}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500">Step</span>
+                <span className="font-semibold text-slate-800">{resolveModal.name}</span>
+              </div>
+            </div>
+
+            <p className="text-sm text-slate-600 mb-5">
+              The worker will receive a WhatsApp message confirming the issue is resolved and to continue working.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setResolveModal(null)}
+                disabled={resolving}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-medium text-sm hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmResolve}
+                disabled={resolving}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {resolving ? (
+                  <><RefreshCw size={14} className="animate-spin" /> Resolving…</>
+                ) : (
+                  <><CheckCircle2 size={14} /> Confirm Resolve</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

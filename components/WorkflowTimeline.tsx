@@ -55,21 +55,25 @@ function useCountdown(timerStartedAt: string | null | undefined, durationMinutes
   return remaining;
 }
 
-function TimerDisplay({ timerStartedAt, durationMinutes, onAlarm }: {
+function TimerDisplay({ timerStartedAt, durationMinutes, status, onAlarm }: {
   timerStartedAt: string | null | undefined;
   durationMinutes: number | null | undefined;
+  status?: string;
   onAlarm?: () => void;
 }) {
   const remaining = useCountdown(timerStartedAt, durationMinutes);
   const alarmFired = useRef(false);
 
   useEffect(() => {
-    if (remaining === 0 && !alarmFired.current) {
+    if (remaining === 0 && !alarmFired.current && status !== 'COMPLETED') {
       alarmFired.current = true;
       onAlarm?.();
     }
     if (remaining !== 0) alarmFired.current = false;
-  }, [remaining, onAlarm]);
+  }, [remaining, onAlarm, status]);
+
+  // Don't show any timer UI on a completed step
+  if (status === 'COMPLETED') return null;
 
   if (remaining === null || !durationMinutes) return null;
 
@@ -224,9 +228,13 @@ function RaiseIssuePanel({ step, onRaiseIssue }: {
 export default function WorkflowTimeline({ steps, onCompleteStep, onSetTimer, onResetTimer, onRaiseIssue, isAdmin }: WorkflowTimelineProps) {
   const [alarmStep, setAlarmStep] = useState<string | null>(null);
 
+  // Auto-dismiss the banner if the alarming step is now completed
+  const alarmingStep = steps.find(s => s.id === alarmStep);
+  const showAlarm = alarmStep && alarmingStep && alarmingStep.status !== 'COMPLETED';
+
   return (
     <div className="relative">
-      {alarmStep && (
+      {showAlarm && (
         <div className="mb-4 flex items-center gap-3 bg-red-50 border border-red-300 rounded-xl px-4 py-3 text-sm animate-pulse">
           <AlarmCheck size={18} className="text-red-600 flex-shrink-0" />
           <div>
@@ -291,10 +299,11 @@ export default function WorkflowTimeline({ steps, onCompleteStep, onSetTimer, on
                     </p>
                   )}
 
-                  {/* Live timer display */}
+                  {/* Live timer display — hidden once step is completed */}
                   <TimerDisplay
                     timerStartedAt={step.timerStartedAt}
                     durationMinutes={step.durationMinutes}
+                    status={step.status}
                     onAlarm={() => setAlarmStep(step.id)}
                   />
 

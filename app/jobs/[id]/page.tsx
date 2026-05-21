@@ -65,6 +65,12 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [tab, setTab] = useState<'workflow' | 'activity' | 'photos' | 'timers'>('workflow');
+  const [toast, setToast] = useState<{ kind: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  const showToast = (kind: 'success' | 'error' | 'info', text: string) => {
+    setToast({ kind, text });
+    setTimeout(() => setToast(null), 7000);
+  };
   const load = useCallback(async () => {
     try {
       const res = await jobsApi.get(id);
@@ -92,10 +98,33 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     if (!job) return;
     setStarting(true);
     try {
-      await jobsApi.start(job.id);
+      const res = await jobsApi.start(job.id);
+      const payload = res.data as {
+        notification?: {
+          status: 'sent' | 'failed' | 'simulated' | 'demo_sent';
+          sid?: string;
+          errorCode?: string | number;
+          errorMessage?: string;
+          to?: string;
+        } | null;
+      };
+      const n = payload.notification;
+      if (!n) {
+        showToast('info', 'Workflow started. First step has no assigned worker, so no WhatsApp was sent.');
+      } else if (n.status === 'sent') {
+        showToast('success', `Workflow started. WhatsApp sent to ${n.to} (SID: ${n.sid}).`);
+      } else if (n.status === 'demo_sent' || n.status === 'simulated') {
+        showToast('info', `Workflow started in DEMO mode. ${n.errorMessage ?? 'No real WhatsApp sent.'}`);
+      } else {
+        showToast(
+          'error',
+          `Workflow started, but WhatsApp delivery FAILED (code ${n.errorCode ?? 'n/a'}): ${n.errorMessage ?? 'Unknown error'}`,
+        );
+      }
       await load();
-    } catch {
-      alert('Start failed. Make sure backend is running.');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      showToast('error', msg || 'Start failed. Make sure backend is running.');
     } finally {
       setStarting(false);
     }
@@ -502,6 +531,25 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           </div>
         </div>
       </main>
+
+      {/* ─── Toast ─── */}
+      {toast && (
+        <div
+          className={`fixed bottom-6 right-6 z-[60] max-w-md px-4 py-3 rounded-xl shadow-lg border text-sm flex items-start gap-3 ${
+            toast.kind === 'success'
+              ? 'bg-green-50 border-green-200 text-green-800'
+              : toast.kind === 'error'
+              ? 'bg-red-50 border-red-200 text-red-800'
+              : 'bg-blue-50 border-blue-200 text-blue-800'
+          }`}
+        >
+          <MessageSquare size={16} className="mt-0.5 flex-shrink-0" />
+          <span className="flex-1 whitespace-pre-wrap">{toast.text}</span>
+          <button onClick={() => setToast(null)} className="text-slate-400 hover:text-slate-600 flex-shrink-0">
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 }

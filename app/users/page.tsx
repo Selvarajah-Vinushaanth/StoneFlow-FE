@@ -4,8 +4,9 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   UserPlus, Trash2, Phone, Mail, Shield, Globe, ToggleLeft, ToggleRight,
   Search, X, ChevronDown, Users, Edit2, Check, Briefcase, WifiOff, RefreshCw,
+  MessageSquare,
 } from 'lucide-react';
-import { usersApi, User, Role, Language } from '@/lib/api';
+import { usersApi, whatsappApi, User, Role, Language } from '@/lib/api';
 import Header from '@/components/Header';
 import Pagination from '@/components/Pagination';
 import { RoleBadge } from '@/components/Badges';
@@ -79,6 +80,33 @@ export default function UsersPage() {
   const [fetchError, setFetchError] = useState(false);
   const [viewUser, setViewUser]   = useState<User | null>(null);
   const [page, setPage]           = useState(1);
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [toast, setToast]         = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+
+  const showToast = (kind: 'success' | 'error', text: string) => {
+    setToast({ kind, text });
+    setTimeout(() => setToast(null), 6000);
+  };
+
+  const handleTestWhatsApp = async (u: User) => {
+    setTestingId(u.id);
+    try {
+      const res = await whatsappApi.test({ userId: u.id });
+      const d = res.data.delivery;
+      if (d.status === 'sent') {
+        showToast('success', `WhatsApp test sent to ${u.name} (${d.to}). SID: ${d.sid}`);
+      } else if (d.status === 'demo_sent') {
+        showToast('error', `Demo mode: ${d.errorMessage ?? 'Twilio credentials missing.'}`);
+      } else {
+        showToast('error', `Failed (code ${d.errorCode ?? 'n/a'}): ${d.errorMessage ?? 'Unknown error'}`);
+      }
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      showToast('error', msg || 'Test request failed. Is the backend running?');
+    } finally {
+      setTestingId(null);
+    }
+  };
 
   const load = useCallback(async () => {
     setFetchError(false);
@@ -267,6 +295,14 @@ export default function UsersPage() {
                     </div>
                     <div className="flex items-center gap-1">
                       <button
+                        onClick={() => handleTestWhatsApp(user)}
+                        disabled={testingId === user.id}
+                        className="p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
+                        title="Send WhatsApp test message"
+                      >
+                        <MessageSquare size={14} />
+                      </button>
+                      <button
                         onClick={() => openEdit(user)}
                         className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
                         title="Edit"
@@ -451,6 +487,23 @@ export default function UsersPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ─── Toast ─── */}
+      {toast && (
+        <div
+          className={`fixed bottom-6 right-6 z-[60] max-w-md px-4 py-3 rounded-xl shadow-lg border text-sm flex items-start gap-3 animate-fade-in ${
+            toast.kind === 'success'
+              ? 'bg-green-50 border-green-200 text-green-800'
+              : 'bg-red-50 border-red-200 text-red-800'
+          }`}
+        >
+          <MessageSquare size={16} className="mt-0.5 flex-shrink-0" />
+          <span className="flex-1">{toast.text}</span>
+          <button onClick={() => setToast(null)} className="text-slate-400 hover:text-slate-600 flex-shrink-0">
+            <X size={14} />
+          </button>
         </div>
       )}
     </>
