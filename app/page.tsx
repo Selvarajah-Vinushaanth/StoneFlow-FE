@@ -72,7 +72,10 @@ export default function DashboardPage() {
 
   // Refresh instantly when a worker sends ISSUE or HELP via WhatsApp
   useWebSocket((msg) => {
-    if (msg.event === 'step_issue' || msg.event === 'step_help' || msg.event === 'issue_resolved') {
+    if (
+      msg.event === 'step_issue' || msg.event === 'step_help' || msg.event === 'issue_resolved' ||
+      msg.event === 'subtask_issue' || msg.event === 'subtask_help'
+    ) {
       load();
     }
   });
@@ -94,10 +97,14 @@ export default function DashboardPage() {
     if (!replyText.trim()) return;
     setReplySending(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/reply-step`, {
+      const endpoint = alert.isSubTask ? 'reply-subtask' : 'reply-step';
+      const body = alert.isSubTask
+        ? { subTaskId: alert.id, adminId: getAdminId(), message: replyText.trim() }
+        : { stepId: alert.id, adminId: getAdminId(), message: replyText.trim() };
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stepId: alert.id, adminId: getAdminId(), message: replyText.trim() }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         const json = await res.json();
@@ -119,10 +126,14 @@ export default function DashboardPage() {
     if (!resolveModal) return;
     setResolving(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/resolve-step`, {
+      const endpoint = resolveModal.isSubTask ? 'resolve-subtask' : 'resolve-step';
+      const body = resolveModal.isSubTask
+        ? { subTaskId: resolveModal.id, adminId: getAdminId() }
+        : { stepId: resolveModal.id, adminId: getAdminId() };
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stepId: resolveModal.id, adminId: getAdminId() }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         const json = await res.json();
@@ -138,10 +149,14 @@ export default function DashboardPage() {
   async function handleQuickReply(alert: AlertStep, message: string) {
     setReplySending(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/reply-step`, {
+      const endpoint = alert.isSubTask ? 'reply-subtask' : 'reply-step';
+      const body = alert.isSubTask
+        ? { subTaskId: alert.id, adminId: getAdminId(), message }
+        : { stepId: alert.id, adminId: getAdminId(), message };
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stepId: alert.id, adminId: getAdminId(), message }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         const json = await res.json();
@@ -342,8 +357,14 @@ export default function DashboardPage() {
                             : <HelpCircle size={15} className="text-orange-600" />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-red-900">
-                            {alert.status === 'ISSUE' ? '⚠️ Issue' : '🆘 Help'} — {alert.name}
+                          <p className="text-sm font-bold text-red-900 flex items-center gap-1.5 flex-wrap">
+                            {alert.status === 'ISSUE' ? '⚠️ Issue' : '🆘 Help'} —
+                            {alert.isSubTask && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 normal-case">
+                                Sub-task
+                              </span>
+                            )}
+                            {alert.name}
                           </p>
                           <p className="text-xs text-red-600 font-medium mt-0.5">{alert.job.jobNumber} · {alert.job.title}</p>
                           {alert.issueText && (

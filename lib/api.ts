@@ -43,6 +43,24 @@ export interface User {
   _count?: { assignedSteps: number };
 }
 
+export interface WorkflowSubTask {
+  id: string;
+  stepId: string;
+  title: string;
+  description?: string;
+  assignedUserId?: string;
+  dueAt?: string;
+  isCompleted: boolean;
+  status: 'WAITING' | 'NOTIFIED' | 'COMPLETED';
+  order: number;
+  createdAt: string;
+  assignedUser?: { name: string; role: string };
+  issueText?: string;
+  durationMinutes?: number | null;
+  timerStartedAt?: string | null;
+  timerAlertSentAt?: string | null;
+}
+
 export interface WorkflowStep {
   id: string;
   jobId: string;
@@ -58,6 +76,7 @@ export interface WorkflowStep {
   issueText?: string;
   durationMinutes?: number | null;
   timerStartedAt?: string | null;
+  subTasks?: WorkflowSubTask[];
 }
 
 export interface Job {
@@ -70,6 +89,7 @@ export interface Job {
   measurements?: string;
   material?: string;
   color?: string;
+  startDate?: string;
   deadline: string;
   status: JobStatus;
   priority: Priority;
@@ -103,6 +123,8 @@ export interface AlertStep {
   updatedAt: string;
   job: { id: string; jobNumber: string; title: string };
   assignedUser?: { id: string; name: string; phone: string };
+  isSubTask?: boolean;
+  stepId?: string;
 }
 
 export interface DashboardData {
@@ -153,9 +175,17 @@ export const jobsApi = {
   resetTimer: (jobId: string, stepId: string) =>
     api.post(`/jobs/${jobId}/steps/${stepId}/timer/reset`),
   getActiveTimers: () =>
-    api.get<{ success: boolean; data: WorkflowStep[] }>('/jobs/timers/active'),
+    api.get<{ success: boolean; data: unknown[] }>('/jobs/timers/active'),
   raiseIssue: (jobId: string, stepId: string, type: 'ISSUE' | 'HELP', details?: string, adminId?: string) =>
     api.post(`/jobs/${jobId}/steps/${stepId}/raise`, { type, details, adminId }),
+  setSubTaskTimer: (jobId: string, stepId: string, subTaskId: string, durationMinutes: number) =>
+    api.post(`/jobs/${jobId}/steps/${stepId}/subtasks/${subTaskId}/timer/start`, { durationMinutes }),
+  resetSubTaskTimer: (jobId: string, stepId: string, subTaskId: string) =>
+    api.post(`/jobs/${jobId}/steps/${stepId}/subtasks/${subTaskId}/timer/reset`),
+  raiseSubTaskIssue: (jobId: string, stepId: string, subTaskId: string, type: 'ISSUE' | 'HELP', details?: string, adminId?: string) =>
+    api.post(`/jobs/${jobId}/steps/${stepId}/subtasks/${subTaskId}/raise`, { type, details, adminId }),
+  completeSubTask: (jobId: string, stepId: string, subTaskId: string) =>
+    api.post(`/jobs/${jobId}/steps/${stepId}/subtasks/${subTaskId}/complete`),
 };
 
 export const messagesApi = {

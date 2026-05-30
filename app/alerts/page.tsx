@@ -53,7 +53,10 @@ export default function AlertsPage() {
 
   // Refresh immediately when a worker sends ISSUE or HELP via WhatsApp
   useWebSocket((msg) => {
-    if (msg.event === 'step_issue' || msg.event === 'step_help' || msg.event === 'issue_resolved') {
+    if (
+      msg.event === 'step_issue' || msg.event === 'step_help' || msg.event === 'issue_resolved' ||
+      msg.event === 'subtask_issue' || msg.event === 'subtask_help'
+    ) {
       load();
     }
   });
@@ -80,10 +83,14 @@ export default function AlertsPage() {
     setReplySending(true);
     const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/reply-step`, {
+      const endpoint = alert.isSubTask ? 'reply-subtask' : 'reply-step';
+      const body = alert.isSubTask
+        ? { subTaskId: alert.id, adminId, message: replyText.trim() }
+        : { stepId: alert.id, adminId, message: replyText.trim() };
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ stepId: alert.id, adminId, message: replyText.trim() }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         const json = await res.json();
@@ -107,10 +114,14 @@ export default function AlertsPage() {
     setResolving(true);
     const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/resolve-step`, {
+      const endpoint = resolveModal.isSubTask ? 'resolve-subtask' : 'resolve-step';
+      const body = resolveModal.isSubTask
+        ? { subTaskId: resolveModal.id, adminId }
+        : { stepId: resolveModal.id, adminId };
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ stepId: resolveModal.id, adminId }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         const json = await res.json();
@@ -127,10 +138,14 @@ export default function AlertsPage() {
     setReplySending(true);
     const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/reply-step`, {
+      const endpoint = alert.isSubTask ? 'reply-subtask' : 'reply-step';
+      const body = alert.isSubTask
+        ? { subTaskId: alert.id, adminId: getAdminId(), message }
+        : { stepId: alert.id, adminId: getAdminId(), message };
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/messages/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ stepId: alert.id, adminId: getAdminId(), message }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         const json = await res.json();
@@ -317,6 +332,11 @@ export default function AlertsPage() {
                           }`}>
                             {alert.status === 'ISSUE' ? '⚠️ ISSUE' : '🆘 HELP'}
                           </span>
+                          {alert.isSubTask && (
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                              Sub-task
+                            </span>
+                          )}
                           <span className="text-slate-800 font-semibold text-sm">{alert.name}</span>
                         </div>
 

@@ -6,9 +6,16 @@ import Link from 'next/link';
 import {
   ArrowLeft, Plus, Trash2, ChevronDown, Save, Eye, Play,
   Briefcase, User, Calendar, AlertCircle, CheckCircle2, GitBranch,
-  GripVertical, ChevronUp,
+  GripVertical, ChevronUp, ListChecks,
 } from 'lucide-react';
 import { jobsApi, usersApi, api, User as UserType } from '@/lib/api';
+
+interface SubTaskForm {
+  title: string;
+  description: string;
+  assignedUserId: string;
+  dueAt: string;
+}
 
 interface StepForm {
   stepNumber: number;
@@ -16,15 +23,16 @@ interface StepForm {
   description: string;
   assignedUserId: string;
   dueAt: string;
+  subTasks: SubTaskForm[];
 }
 
 const DEFAULT_STEPS: Omit<StepForm, 'stepNumber'>[] = [
-  { name: 'Cutting', description: 'Cut stone to required measurements', assignedUserId: '', dueAt: '' },
-  { name: 'Polishing', description: 'Polish surface to required finish', assignedUserId: '', dueAt: '' },
-  { name: 'Edge Finishing', description: 'Shape and finish all edges', assignedUserId: '', dueAt: '' },
-  { name: 'QC Inspection', description: 'Quality check before packing', assignedUserId: '', dueAt: '' },
-  { name: 'Packing', description: 'Pack securely for delivery', assignedUserId: '', dueAt: '' },
-  { name: 'Installation', description: 'Install at site and upload photos', assignedUserId: '', dueAt: '' },
+  { name: 'Cutting', description: 'Cut stone to required measurements', assignedUserId: '', dueAt: '', subTasks: [] },
+  { name: 'Polishing', description: 'Polish surface to required finish', assignedUserId: '', dueAt: '', subTasks: [] },
+  { name: 'Edge Finishing', description: 'Shape and finish all edges', assignedUserId: '', dueAt: '', subTasks: [] },
+  { name: 'QC Inspection', description: 'Quality check before packing', assignedUserId: '', dueAt: '', subTasks: [] },
+  { name: 'Packing', description: 'Pack securely for delivery', assignedUserId: '', dueAt: '', subTasks: [] },
+  { name: 'Installation', description: 'Install at site and upload photos', assignedUserId: '', dueAt: '', subTasks: [] },
 ];
 
 const MATERIALS = [
@@ -52,6 +60,7 @@ function NewJobContent() {
   const [measurements, setMeasurements] = useState('');
   const [material, setMaterial]         = useState('');
   const [color, setColor]               = useState('');
+  const [startDate, setStartDate]       = useState('');
   const [deadline, setDeadline]         = useState('');
   const [priority, setPriority]         = useState('NORMAL');
   const [notes, setNotes]               = useState('');
@@ -79,6 +88,7 @@ function NewJobContent() {
           description: s.description ?? '',
           assignedUserId: '',
           dueAt: '',
+          subTasks: [],
         })));
       }).catch(() => { /* fallback to default steps */ });
     }
@@ -88,7 +98,7 @@ function NewJobContent() {
   const addStep = () => {
     setSteps(prev => [
       ...prev,
-      { stepNumber: prev.length + 1, name: '', description: '', assignedUserId: '', dueAt: '' },
+      { stepNumber: prev.length + 1, name: '', description: '', assignedUserId: '', dueAt: '', subTasks: [] },
     ]);
   };
 
@@ -96,7 +106,7 @@ function NewJobContent() {
     setSteps(prev => prev.filter((_, i) => i !== idx).map((s, i) => ({ ...s, stepNumber: i + 1 })));
   };
 
-  const updateStep = (idx: number, field: keyof StepForm, value: string) => {
+  const updateStep = (idx: number, field: keyof Omit<StepForm, 'subTasks'>, value: string) => {
     setSteps(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s));
   };
 
@@ -108,6 +118,27 @@ function NewJobContent() {
       [arr[idx], arr[swap]] = [arr[swap], arr[idx]];
       return arr.map((s, i) => ({ ...s, stepNumber: i + 1 }));
     });
+  };
+
+  // Sub-task handlers
+  const addSubTask = (stepIdx: number) => {
+    setSteps(prev => prev.map((s, i) =>
+      i === stepIdx ? { ...s, subTasks: [...s.subTasks, { title: '', description: '', assignedUserId: '', dueAt: '' }] } : s
+    ));
+  };
+
+  const removeSubTask = (stepIdx: number, subIdx: number) => {
+    setSteps(prev => prev.map((s, i) =>
+      i === stepIdx ? { ...s, subTasks: s.subTasks.filter((_, j) => j !== subIdx) } : s
+    ));
+  };
+
+  const updateSubTask = (stepIdx: number, subIdx: number, field: keyof SubTaskForm, value: string) => {
+    setSteps(prev => prev.map((s, i) =>
+      i === stepIdx
+        ? { ...s, subTasks: s.subTasks.map((st, j) => j === subIdx ? { ...st, [field]: value } : st) }
+        : s
+    ));
   };
 
   const validateDetails = () => {
@@ -122,11 +153,18 @@ function NewJobContent() {
     try {
       const payload = {
         title, clientName, clientPhone, description, measurements,
-        material, color, deadline, priority, notes,
+        material, color, startDate: startDate || undefined, deadline, priority, notes,
         steps: steps.filter(s => s.name.trim()).map(s => ({
           ...s,
           assignedUserId: s.assignedUserId || undefined,
           dueAt: s.dueAt || undefined,
+          subTasks: s.subTasks.filter(st => st.title.trim()).map((st, i) => ({
+            title: st.title,
+            description: st.description || undefined,
+            assignedUserId: st.assignedUserId || undefined,
+            dueAt: st.dueAt || undefined,
+            order: i,
+          })),
         })),
       };
       const res = await jobsApi.create(payload);
@@ -256,7 +294,15 @@ function NewJobContent() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Start Date</label>
+                  <input
+                    type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                  <p className="text-xs text-slate-400 mt-1">Auto-start workflow on this date (if enabled in Settings)</p>
+                </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5">Deadline *</label>
                   <input
@@ -355,31 +401,146 @@ function NewJobContent() {
                           className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
                         />
                       </div>
-                      <div>
-                        <div className="relative">
-                          <select
-                            value={s.assignedUserId}
-                            onChange={e => updateStep(idx, 'assignedUserId', e.target.value)}
-                            className="w-full appearance-none pl-2.5 pr-7 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
-                          >
-                            <option value="">Assign worker...</option>
-                            {users.filter(u => u.isActive).map(u => (
-                              <option key={u.id} value={u.id}>
-                                {u.name} ({u.role.replace(/_/g, ' ')})
-                              </option>
-                            ))}
-                          </select>
-                          <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                      {s.subTasks.length > 0 ? (
+                        <div className="sm:col-span-2 flex items-center gap-2 px-2.5 py-1.5 bg-amber-50 border border-dashed border-amber-200 rounded-lg">
+                          <ListChecks size={13} className="text-amber-500 flex-shrink-0" />
+                          <p className="text-xs text-amber-700">Worker &amp; due date managed per sub-task below</p>
                         </div>
+                      ) : (
+                        <>
+                          <div>
+                            <div className="relative">
+                              <select
+                                value={s.assignedUserId}
+                                onChange={e => updateStep(idx, 'assignedUserId', e.target.value)}
+                                className="w-full appearance-none pl-2.5 pr-7 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                              >
+                                <option value="">Assign worker...</option>
+                                {users.filter(u => u.isActive).map(u => (
+                                  <option key={u.id} value={u.id}>
+                                    {u.name} ({u.role.replace(/_/g, ' ')})
+                                  </option>
+                                ))}
+                              </select>
+                              <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                            </div>
+                          </div>
+                          <div>
+                            <input
+                              type="date"
+                              value={s.dueAt}
+                              onChange={e => updateStep(idx, 'dueAt', e.target.value)}
+                              className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                            />
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Sub-tasks */}
+                    <div className="mt-3 border-t border-slate-200 pt-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+                          <ListChecks size={12} className="text-amber-400" /> Sub-tasks
+                          {s.subTasks.length > 0 && (
+                            <span className="bg-slate-100 text-slate-500 rounded-full px-1.5 py-0.5 text-xs">{s.subTasks.length}</span>
+                          )}
+                        </span>
+                        <button
+                          onClick={() => addSubTask(idx)}
+                          className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-amber-50 transition-colors"
+                        >
+                          <Plus size={11} /> Add Sub-task
+                        </button>
                       </div>
-                      <div>
-                        <input
-                          type="date"
-                          value={s.dueAt}
-                          onChange={e => updateStep(idx, 'dueAt', e.target.value)}
-                          className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
-                        />
-                      </div>
+                      {s.subTasks.length > 0 && (
+                        <div className="space-y-2 pl-2 border-l-2 border-amber-100">
+                          {s.subTasks.map((st, subIdx) => (
+                            <div key={subIdx} className="border border-slate-100 rounded-xl p-3 bg-white hover:border-amber-200 transition-colors">
+                              {/* Sub-task header row: letter badge + name + move + delete */}
+                              <div className="flex items-center gap-2 mb-2.5">
+                                <div className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                                  {String.fromCharCode(97 + subIdx)}
+                                </div>
+                                <input
+                                  value={st.title}
+                                  onChange={e => updateSubTask(idx, subIdx, 'title', e.target.value)}
+                                  placeholder="Sub-task name..."
+                                  className="flex-1 px-2.5 py-1.5 text-xs font-medium border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                                />
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => setSteps(prev => prev.map((step, si) => {
+                                      if (si !== idx) return step;
+                                      const arr = [...step.subTasks];
+                                      if (subIdx === 0) return step;
+                                      [arr[subIdx], arr[subIdx - 1]] = [arr[subIdx - 1], arr[subIdx]];
+                                      return { ...step, subTasks: arr };
+                                    }))}
+                                    disabled={subIdx === 0}
+                                    className="p-1 text-slate-400 hover:text-slate-600 disabled:opacity-30"
+                                  >
+                                    <ChevronUp size={12} />
+                                  </button>
+                                  <button
+                                    onClick={() => setSteps(prev => prev.map((step, si) => {
+                                      if (si !== idx) return step;
+                                      const arr = [...step.subTasks];
+                                      if (subIdx === arr.length - 1) return step;
+                                      [arr[subIdx], arr[subIdx + 1]] = [arr[subIdx + 1], arr[subIdx]];
+                                      return { ...step, subTasks: arr };
+                                    }))}
+                                    disabled={subIdx === s.subTasks.length - 1}
+                                    className="p-1 text-slate-400 hover:text-slate-600 disabled:opacity-30"
+                                  >
+                                    <ChevronDown size={12} />
+                                  </button>
+                                  <button
+                                    onClick={() => removeSubTask(idx, subIdx)}
+                                    className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              </div>
+                              {/* Sub-task detail grid: description | assign worker | due date */}
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <div>
+                                  <input
+                                    value={st.description}
+                                    onChange={e => updateSubTask(idx, subIdx, 'description', e.target.value)}
+                                    placeholder="Description (optional)"
+                                    className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                                  />
+                                </div>
+                                <div className="relative">
+                                  <select
+                                    value={st.assignedUserId}
+                                    onChange={e => updateSubTask(idx, subIdx, 'assignedUserId', e.target.value)}
+                                    className="w-full appearance-none pl-2.5 pr-7 py-1.5 text-xs border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                                  >
+                                    <option value="">Assign worker...</option>
+                                    {users.filter(u => u.isActive).map(u => (
+                                      <option key={u.id} value={u.id}>
+                                        {u.name} ({u.role.replace(/_/g, ' ')})
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                </div>
+                                <div>
+                                  <input
+                                    type="date"
+                                    value={st.dueAt}
+                                    onChange={e => updateSubTask(idx, subIdx, 'dueAt', e.target.value)}
+                                    className="w-full px-2.5 py-1.5 text-xs border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -426,6 +587,7 @@ function NewJobContent() {
                     ['Material', material || '—'],
                     ['Color', color || '—'],
                     ['Measurements', measurements || '—'],
+                    ['Start Date', startDate ? new Date(startDate).toLocaleDateString() : '—'],
                     ['Deadline', deadline ? new Date(deadline).toLocaleDateString() : '—'],
                     ['Priority', priority],
                   ].map(([label, value]) => (
@@ -451,22 +613,62 @@ function NewJobContent() {
                 <div className="space-y-2">
                   {steps.filter(s => s.name).map((s, i) => {
                     const assignedUser = users.find(u => u.id === s.assignedUserId);
+                    const validSubTasks = s.subTasks.filter(st => st.title.trim());
                     return (
-                      <div key={i} className="flex items-center gap-3 py-2 border-b border-slate-50 last:border-0">
-                        <div className="w-7 h-7 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
-                          {i + 1}
+                      <div key={i} className="py-3 border-b border-slate-100 last:border-0">
+                        {/* Main step row */}
+                        <div className="flex items-center gap-3">
+                          <div className="w-7 h-7 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                            {i + 1}
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-medium text-slate-800 text-sm">{s.name}</p>
+                            {s.description && <p className="text-xs text-slate-400">{s.description}</p>}
+                          </div>
+                          <div className="text-right">
+                            {validSubTasks.length > 0 ? (
+                              <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full font-medium">
+                                {validSubTasks.length} sub-task{validSubTasks.length !== 1 ? 's' : ''}
+                              </span>
+                            ) : assignedUser ? (
+                              <p className="text-xs font-medium text-slate-700">{assignedUser.name}</p>
+                            ) : (
+                              <p className="text-xs text-slate-400">Unassigned</p>
+                            )}
+                            {!validSubTasks.length && s.dueAt && (
+                              <p className="text-xs text-slate-400 mt-0.5">{new Date(s.dueAt).toLocaleDateString()}</p>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex-1">
-                          <p className="font-medium text-slate-800 text-sm">{s.name}</p>
-                          {s.description && <p className="text-xs text-slate-400">{s.description}</p>}
-                        </div>
-                        <div className="text-right">
-                          {assignedUser ? (
-                            <p className="text-xs font-medium text-slate-700">{assignedUser.name}</p>
-                          ) : (
-                            <p className="text-xs text-slate-400">Unassigned</p>
-                          )}
-                        </div>
+                        {/* Sub-tasks */}
+                        {validSubTasks.length > 0 && (
+                          <div className="mt-2 pl-10 space-y-1.5">
+                            {validSubTasks.map((st, si) => {
+                              const stUser = users.find(u => u.id === st.assignedUserId);
+                              return (
+                                <div key={si} className="flex items-center gap-2 bg-white border border-slate-100 rounded-lg px-3 py-2">
+                                  <div className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                                    {String.fromCharCode(97 + si)}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-medium text-slate-800 truncate">{st.title}</p>
+                                    {st.description && <p className="text-xs text-slate-400 truncate">{st.description}</p>}
+                                  </div>
+                                  <div className="text-right flex-shrink-0">
+                                    {stUser ? (
+                                      <p className="text-xs font-medium text-slate-600">{stUser.name}</p>
+                                    ) : (
+                                      <p className="text-xs text-slate-300">Unassigned</p>
+                                    )}
+                                    {st.dueAt && (
+                                      <p className="text-xs text-slate-400">{new Date(st.dueAt).toLocaleDateString()}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

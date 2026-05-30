@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-  Settings, Globe, Bell, Check, Send, Terminal,
+  Settings, Globe, Bell, Check, Send, Terminal, Info,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import Header from '@/components/Header';
@@ -12,15 +12,18 @@ interface SystemSettings {
   timezone: string;
   notifyAdmin: boolean;
   autoStart: boolean;
+  autoStartOnDate: boolean;
 }
 
 export default function SettingsPage() {
   const [saving, setSaving]           = useState(false);
   const [saved, setSaved]             = useState(false);
   const [saveError, setSaveError]     = useState('');
+  const [autoStartAlert, setAutoStartAlert] = useState('');
   const [companyName, setCompanyName] = useState('Stone Co Sdn Bhd');
   const [notifyAdmin, setNotifyAdmin] = useState(true);
   const [autoStart, setAutoStart]     = useState(false);
+  const [autoStartOnDate, setAutoStartOnDate] = useState(false);
 
   // WhatsApp simulator
   const [simPhone, setSimPhone]     = useState('');
@@ -36,6 +39,7 @@ export default function SettingsPage() {
         setCompanyName(d.companyName);
         setNotifyAdmin(d.notifyAdmin);
         setAutoStart(d.autoStart);
+        setAutoStartOnDate(d.autoStartOnDate);
       })
       .catch(() => {/* use defaults */});
   }, []);
@@ -43,7 +47,7 @@ export default function SettingsPage() {
   const handleSave = async () => {
     setSaving(true); setSaveError('');
     try {
-      await api.patch('/settings', { companyName, notifyAdmin, autoStart });
+      await api.patch('/settings', { companyName, notifyAdmin, autoStart, autoStartOnDate });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch {
@@ -144,13 +148,23 @@ export default function SettingsPage() {
                       label: 'Admin Alerts & WhatsApp Notifications',
                       desc: 'ON → ISSUE / HELP reports appear in the Alerts panel instantly and a WhatsApp message is sent to admin. OFF → no alerts in dashboard and no WhatsApp sent to admin.',
                       val: notifyAdmin,
-                      set: setNotifyAdmin,
+                      set: (v: boolean) => setNotifyAdmin(v),
                     },
                     {
                       label: 'Auto-start workflow on job creation',
                       desc: 'When on, a new job starts immediately after creation and the first assigned worker is notified. Manual Start Workflow is not needed.',
                       val: autoStart,
-                      set: setAutoStart,
+                      set: (v: boolean) => setAutoStart(v),
+                    },
+                    {
+                      label: 'Auto-start workflow on scheduled start date',
+                      desc: 'ON → on the job\'s start date, the workflow starts automatically and the first worker is notified. OFF → a reminder alert is shown on that date to start manually.',
+                      val: autoStartOnDate,
+                      set: (v: boolean) => {
+                        setAutoStartOnDate(v);
+                        if (!v) setAutoStartAlert('Auto-start on date is now OFF. Jobs with a scheduled start date will NOT start automatically — a reminder alert will appear instead.');
+                        else setAutoStartAlert('');
+                      },
                     },
                   ].map(({ label, desc, val, set }) => (
                     <div key={label} className="flex items-center justify-between gap-4 px-6 py-4">
@@ -169,6 +183,15 @@ export default function SettingsPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Auto-start alert banner */}
+              {autoStartAlert && (
+                <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                  <Info size={15} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-amber-800">{autoStartAlert}</p>
+                  <button onClick={() => setAutoStartAlert('')} className="ml-auto text-amber-400 hover:text-amber-600 text-xs font-bold">✕</button>
+                </div>
+              )}
 
               {/* Mobile save button */}
               <div className="flex flex-col gap-2 sm:hidden">

@@ -1,8 +1,23 @@
 'use client';
 
 import { StepStatus } from '@/lib/api';
-import { CheckCircle2, Clock, AlertTriangle, HelpCircle, PlayCircle, SkipForward, Bell, Timer, AlarmCheck } from 'lucide-react';
+import { CheckCircle2, Clock, AlertTriangle, HelpCircle, PlayCircle, SkipForward, Bell, Timer, AlarmCheck, ListChecks } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+
+interface WorkflowSubTask {
+  id: string;
+  title: string;
+  description?: string;
+  assignedUserId?: string;
+  dueAt?: string;
+  isCompleted: boolean;
+  status?: string; // WAITING | NOTIFIED | COMPLETED
+  order: number;
+  assignedUser?: { name: string; role: string };
+  issueText?: string;
+  durationMinutes?: number | null;
+  timerStartedAt?: string | null;
+}
 
 interface WorkflowStep {
   id: string;
@@ -15,6 +30,7 @@ interface WorkflowStep {
   completedAt?: string;
   durationMinutes?: number | null;
   timerStartedAt?: string | null;
+  subTasks?: WorkflowSubTask[];
 }
 
 interface WorkflowTimelineProps {
@@ -23,6 +39,10 @@ interface WorkflowTimelineProps {
   onSetTimer?: (stepId: string, minutes: number) => void;
   onResetTimer?: (stepId: string) => void;
   onRaiseIssue?: (stepId: string, type: 'ISSUE' | 'HELP', details: string) => void;
+  onSetSubTaskTimer?: (stepId: string, subTaskId: string, minutes: number) => void;
+  onResetSubTaskTimer?: (stepId: string, subTaskId: string) => void;
+  onRaiseSubTaskIssue?: (stepId: string, subTaskId: string, type: 'ISSUE' | 'HELP', details: string) => void;
+  onCompleteSubTask?: (stepId: string, subTaskId: string) => void;
   isAdmin?: boolean;
 }
 
@@ -225,7 +245,109 @@ function RaiseIssuePanel({ step, onRaiseIssue }: {
   );
 }
 
-export default function WorkflowTimeline({ steps, onCompleteStep, onSetTimer, onResetTimer, onRaiseIssue, isAdmin }: WorkflowTimelineProps) {
+// ─── Sub-task timer setter ────────────────────────────────────────────────────
+function SubTaskTimerSetter({ subTask, onSetTimer, onResetTimer }: {
+  subTask: WorkflowSubTask;
+  onSetTimer: (minutes: number) => void;
+  onResetTimer: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [minutes, setMinutes] = useState(30);
+  const hasTimer = subTask.timerStartedAt && subTask.durationMinutes;
+
+  if (!open) {
+    return (
+      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+        {hasTimer ? (
+          <>
+            <span className="text-xs text-slate-400 flex items-center gap-1">
+              <Timer size={10} /> {subTask.durationMinutes}m timer
+            </span>
+            <button
+              onClick={onResetTimer}
+              className="text-xs px-1.5 py-0.5 border border-slate-300 text-slate-500 rounded-md hover:border-red-400 hover:text-red-600"
+            >
+              Reset
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => setOpen(true)}
+            className="text-xs flex items-center gap-1 px-1.5 py-0.5 border border-dashed border-slate-300 text-slate-400 rounded-md hover:border-amber-400 hover:text-amber-600"
+          >
+            <Timer size={10} /> Set Timer
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1 mt-1 flex-wrap">
+      <Timer size={11} className="text-amber-500" />
+      <select
+        value={minutes}
+        onChange={e => setMinutes(Number(e.target.value))}
+        className="border border-slate-300 rounded-md px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-amber-400"
+      >
+        {[1,5,10,15,20,30,45,60,90,120].map(m => (
+          <option key={m} value={m}>{m >= 60 ? `${m/60}h` : `${m}m`}</option>
+        ))}
+      </select>
+      <button
+        onClick={() => { onSetTimer(minutes); setOpen(false); }}
+        className="text-xs px-2 py-0.5 bg-amber-500 text-white rounded-md hover:bg-amber-600 font-medium"
+      >Start</button>
+      <button onClick={() => setOpen(false)} className="text-xs text-slate-400 hover:text-slate-600">Cancel</button>
+    </div>
+  );
+}
+
+// ─── Sub-task raise issue panel ───────────────────────────────────────────────
+function SubTaskRaiseIssuePanel({ subTask, onRaise }: {
+  subTask: WorkflowSubTask;
+  onRaise: (type: 'ISSUE' | 'HELP', details: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [type, setType] = useState<'ISSUE' | 'HELP'>('ISSUE');
+  const [details, setDetails] = useState('');
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="text-xs flex items-center gap-1 px-1.5 py-0.5 border border-dashed border-red-300 text-red-400 rounded-md hover:border-red-500 hover:text-red-600 mt-1"
+      >
+        <AlertTriangle size={10} /> Issue / Help
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-1.5 p-2 bg-red-50 border border-red-200 rounded-lg space-y-1.5">
+      <div className="flex gap-1.5">
+        <button onClick={() => setType('ISSUE')} className={`text-xs px-2 py-0.5 rounded font-medium border transition-colors ${type === 'ISSUE' ? 'bg-red-500 text-white border-red-500' : 'border-red-300 text-red-500'}`}>⚠️ Issue</button>
+        <button onClick={() => setType('HELP')} className={`text-xs px-2 py-0.5 rounded font-medium border transition-colors ${type === 'HELP' ? 'bg-orange-500 text-white border-orange-500' : 'border-orange-300 text-orange-500'}`}>🆘 Help</button>
+      </div>
+      <input
+        type="text"
+        value={details}
+        onChange={e => setDetails(e.target.value)}
+        placeholder={type === 'ISSUE' ? 'Describe issue…' : 'Describe help needed…'}
+        className="w-full text-xs border border-slate-300 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-red-400"
+      />
+      <div className="flex gap-1">
+        <button onClick={() => { onRaise(type, details); setOpen(false); setDetails(''); }} className="text-xs px-2 py-0.5 bg-red-500 text-white rounded hover:bg-red-600 font-medium">Submit</button>
+        <button onClick={() => { setOpen(false); setDetails(''); }} className="text-xs text-slate-400 hover:text-slate-600 px-1">Cancel</button>
+      </div>
+      {subTask.issueText && (
+        <p className="text-xs text-red-600 italic">Previous: {subTask.issueText}</p>
+      )}
+    </div>
+  );
+}
+
+export default function WorkflowTimeline({ steps, onCompleteStep, onSetTimer, onResetTimer, onRaiseIssue, onSetSubTaskTimer, onResetSubTaskTimer, onRaiseSubTaskIssue, onCompleteSubTask, isAdmin }: WorkflowTimelineProps) {
   const [alarmStep, setAlarmStep] = useState<string | null>(null);
 
   // Auto-dismiss the banner if the alarming step is now completed
@@ -297,6 +419,104 @@ export default function WorkflowTimeline({ steps, onCompleteStep, onSetTimer, on
                     <p className="text-xs text-amber-600 mt-0.5">
                       Started: {new Date(step.startedAt).toLocaleString()}
                     </p>
+                  )}
+
+                  {/* Sub-tasks */}
+                  {step.subTasks && step.subTasks.length > 0 && (
+                    <div className="mt-2.5 pl-2 border-l-2 border-amber-100 space-y-2">
+                      <p className="text-xs font-semibold text-slate-400 flex items-center gap-1 mb-1">
+                        <ListChecks size={11} className="text-amber-400" /> Sub-tasks
+                      </p>
+                      {step.subTasks.map((st, si) => {
+                        const stStatus = st.status ?? (st.isCompleted ? 'COMPLETED' : 'WAITING');
+                        const canInteract = isAdmin && stStatus !== 'COMPLETED';
+                        return (
+                          <div
+                            key={st.id}
+                            className={`rounded-lg px-2.5 py-2 border text-xs ${
+                              stStatus === 'COMPLETED'
+                                ? 'bg-green-50 border-green-200 text-green-700'
+                                : st.issueText && stStatus !== 'COMPLETED'
+                                ? 'bg-red-50 border-red-300 text-red-700'
+                                : stStatus === 'NOTIFIED'
+                                ? 'bg-blue-50 border-blue-200 text-blue-700'
+                                : 'bg-white border-slate-100 text-slate-500'
+                            }`}
+                          >
+                            {/* Row 1: badge + title + status icon */}
+                            <div className="flex items-center gap-2">
+                              <div className="w-4 h-4 rounded-full bg-amber-100 text-amber-700 font-bold flex items-center justify-center flex-shrink-0 text-xs">
+                                {String.fromCharCode(97 + si)}
+                              </div>
+                              <span className="font-medium flex-1 truncate">{st.title}</span>
+                              <div className="flex-shrink-0">
+                                {st.issueText && stStatus !== 'COMPLETED' ? (
+                                  <AlertTriangle size={13} className="text-red-500" />
+                                ) : stStatus === 'COMPLETED' ? (
+                                  <CheckCircle2 size={13} className="text-green-500" />
+                                ) : stStatus === 'NOTIFIED' ? (
+                                  <Bell size={13} className="text-blue-500" />
+                                ) : (
+                                  <Clock size={13} className="text-slate-300" />
+                                )}
+                              </div>
+                            </div>
+                            {/* Issue / help banner */}
+                            {st.issueText && stStatus !== 'COMPLETED' && (
+                              <div className="mt-1.5 ml-6 flex items-start gap-1.5 px-2 py-1.5 bg-red-100 border border-red-200 rounded-md">
+                                <AlertTriangle size={11} className="text-red-500 flex-shrink-0 mt-0.5" />
+                                <p className="text-red-700 font-medium leading-snug">{st.issueText}</p>
+                              </div>
+                            )}
+                            {/* Row 2: description + worker + due date */}
+                            {(st.description || st.assignedUser || st.dueAt) && (
+                              <div className="mt-0.5 ml-6 flex flex-wrap gap-x-2 gap-y-0.5 text-slate-400">
+                                {st.description && <span className="truncate">{st.description}</span>}
+                                {st.assignedUser && <span className="font-medium text-slate-600">{st.assignedUser.name}</span>}
+                                {st.dueAt && <span>{new Date(st.dueAt).toLocaleDateString()}</span>}
+                              </div>
+                            )}
+                            {/* Timer display */}
+                            <div className="ml-6">
+                              <TimerDisplay
+                                timerStartedAt={st.timerStartedAt}
+                                durationMinutes={st.durationMinutes}
+                                status={stStatus}
+                                onAlarm={() => setAlarmStep(`subtask-${st.id}`)}
+                              />
+                            </div>
+                            {/* Admin controls */}
+                            {canInteract && onSetSubTaskTimer && onResetSubTaskTimer && (
+                              <div className="ml-6">
+                                <SubTaskTimerSetter
+                                  subTask={st}
+                                  onSetTimer={(mins) => onSetSubTaskTimer(step.id, st.id, mins)}
+                                  onResetTimer={() => onResetSubTaskTimer(step.id, st.id)}
+                                />
+                              </div>
+                            )}
+                            {canInteract && stStatus === 'NOTIFIED' && onRaiseSubTaskIssue && (
+                              <div className="ml-6">
+                                <SubTaskRaiseIssuePanel
+                                  subTask={st}
+                                  onRaise={(type, details) => onRaiseSubTaskIssue(step.id, st.id, type, details)}
+                                />
+                              </div>
+                            )}
+                            {canInteract && stStatus === 'NOTIFIED' && onCompleteSubTask && (
+                              <div className="ml-6 mt-1">
+                                <button
+                                  onClick={() => onCompleteSubTask(step.id, st.id)}
+                                  className="text-xs px-2 py-0.5 bg-green-600 text-white rounded-md hover:bg-green-700 font-medium flex items-center gap-1"
+                                >
+                                  <CheckCircle2 size={10} /> Mark Done
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
 
                   {/* Live timer display — hidden once step is completed */}

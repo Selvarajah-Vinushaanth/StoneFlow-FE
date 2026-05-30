@@ -214,6 +214,100 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     }
   };
 
+  const handleSetSubTaskTimer = async (stepId: string, subTaskId: string, minutes: number) => {
+    if (!job) return;
+    try {
+      await jobsApi.setSubTaskTimer(job.id, stepId, subTaskId, minutes);
+      await load();
+    } catch {
+      setJob(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          workflowSteps: prev.workflowSteps.map(s =>
+            s.id === stepId ? {
+              ...s,
+              subTasks: (s.subTasks ?? []).map(st =>
+                st.id === subTaskId ? { ...st, durationMinutes: minutes, timerStartedAt: new Date().toISOString() } : st
+              ),
+            } : s
+          ),
+        };
+      });
+    }
+  };
+
+  const handleResetSubTaskTimer = async (stepId: string, subTaskId: string) => {
+    if (!job) return;
+    try {
+      await jobsApi.resetSubTaskTimer(job.id, stepId, subTaskId);
+      await load();
+    } catch {
+      setJob(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          workflowSteps: prev.workflowSteps.map(s =>
+            s.id === stepId ? {
+              ...s,
+              subTasks: (s.subTasks ?? []).map(st =>
+                st.id === subTaskId ? { ...st, durationMinutes: null, timerStartedAt: null } : st
+              ),
+            } : s
+          ),
+        };
+      });
+    }
+  };
+
+  const handleRaiseSubTaskIssue = async (stepId: string, subTaskId: string, type: 'ISSUE' | 'HELP', details: string) => {
+    if (!job) return;
+    let adminId: string | undefined;
+    try { adminId = JSON.parse(localStorage.getItem('auth_user') ?? '{}').id ?? undefined; } catch { /* ignore */ }
+    try {
+      await jobsApi.raiseSubTaskIssue(job.id, stepId, subTaskId, type, details, adminId);
+      await load();
+    } catch {
+      setJob(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          workflowSteps: prev.workflowSteps.map(s =>
+            s.id === stepId ? {
+              ...s,
+              subTasks: (s.subTasks ?? []).map(st =>
+                st.id === subTaskId ? { ...st, issueText: details } : st
+              ),
+            } : s
+          ),
+        };
+      });
+    }
+  };
+
+  const handleCompleteSubTask = async (stepId: string, subTaskId: string) => {
+    if (!job) return;
+    try {
+      await jobsApi.completeSubTask(job.id, stepId, subTaskId);
+      await load();
+    } catch {
+      setJob(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          workflowSteps: prev.workflowSteps.map(s =>
+            s.id === stepId ? {
+              ...s,
+              subTasks: (s.subTasks ?? []).map(st =>
+                st.id === subTaskId ? { ...st, status: 'COMPLETED' as const, isCompleted: true } : st
+              ),
+            } : s
+          ),
+        };
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -229,7 +323,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const issueSteps = job.workflowSteps.filter(s => s.status === 'ISSUE' || s.status === 'HELP_NEEDED');
 
   return (
-    <div className="flex flex-col flex-1">
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Header */}
       <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center gap-4">
         <Link href="/jobs" className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0">
@@ -266,7 +360,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
         </div>
       </div>
 
-      <main className="flex-1 p-6 overflow-y-auto">
+      <main className="flex-1 min-h-0 p-6 overflow-y-auto">
         {/* Issue Alert */}
         {issueSteps.length > 0 && (
           <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4 mb-5">
@@ -346,6 +440,10 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                     onSetTimer={handleSetTimer}
                     onResetTimer={handleResetTimer}
                     onRaiseIssue={handleRaiseIssue}
+                    onSetSubTaskTimer={handleSetSubTaskTimer}
+                    onResetSubTaskTimer={handleResetSubTaskTimer}
+                    onRaiseSubTaskIssue={handleRaiseSubTaskIssue}
+                    onCompleteSubTask={handleCompleteSubTask}
                     isAdmin
                   />
                 )}
@@ -391,7 +489,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                 {tab === 'timers' && (
                   <div className="space-y-3">
                     <p className="text-xs text-slate-500 flex items-center gap-1.5">
-                      <Timer size={12} /> Set time limits per step. Workers are shown countdowns; admin sees live status here.
+                      <Timer size={12} /> Set time limits per step or sub-task. Workers are shown countdowns; admin sees live status here.
                     </p>
                     {job.workflowSteps.filter(s => s.status !== 'COMPLETED' && s.status !== 'SKIPPED').length === 0 ? (
                       <div className="text-center py-8 text-slate-400">
@@ -403,6 +501,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                         .filter(s => s.status !== 'COMPLETED' && s.status !== 'SKIPPED')
                         .map(step => {
                           const hasTimer = step.timerStartedAt && step.durationMinutes;
+                          const activeSubTasks = (step.subTasks ?? []).filter(st => st.status !== 'COMPLETED');
                           return (
                             <div key={step.id} className={`rounded-xl border px-4 py-3 ${hasTimer ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white'}`}>
                               <div className="flex items-start gap-3">
@@ -411,35 +510,85 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <p className="font-semibold text-slate-800 text-sm">{step.name}</p>
-                                  {step.assignedUser && (
+                                  {step.assignedUser && !activeSubTasks.length && (
                                     <p className="text-xs text-slate-500">{step.assignedUser.name} · {step.assignedUser.role.replace(/_/g, ' ')}</p>
                                   )}
-                                  {hasTimer && (
-                                    <div className="mt-1.5 flex items-center gap-2 text-xs text-amber-700">
-                                      <Timer size={12} />
-                                      <span>Started {new Date(step.timerStartedAt!).toLocaleTimeString()} · {step.durationMinutes}min limit</span>
+                                  {/* Step timer controls (only if no active sub-tasks) */}
+                                  {activeSubTasks.length === 0 && (
+                                    <>
+                                      {hasTimer && (
+                                        <div className="mt-1.5 flex items-center gap-2 text-xs text-amber-700">
+                                          <Timer size={12} />
+                                          <span>Started {new Date(step.timerStartedAt!).toLocaleTimeString()} · {step.durationMinutes}min limit</span>
+                                        </div>
+                                      )}
+                                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                        {hasTimer ? (
+                                          <button
+                                            onClick={() => handleResetTimer(step.id)}
+                                            className="text-xs px-2.5 py-1 border border-red-300 text-red-600 rounded-lg hover:bg-red-50"
+                                          >
+                                            Clear Timer
+                                          </button>
+                                        ) : (
+                                          [1, 15, 30, 45, 60, 90, 120].map(m => (
+                                            <button
+                                              key={m}
+                                              onClick={() => handleSetTimer(step.id, m)}
+                                              className="text-xs px-2.5 py-1 border border-slate-300 text-slate-600 rounded-lg hover:border-amber-400 hover:text-amber-600 hover:bg-amber-50"
+                                            >
+                                              {m >= 60 ? `${m / 60}h` : `${m}m`}
+                                            </button>
+                                          ))
+                                        )}
+                                      </div>
+                                    </>
+                                  )}
+                                  {/* Sub-task timers */}
+                                  {activeSubTasks.length > 0 && (
+                                    <div className="mt-2 space-y-2 pl-2 border-l-2 border-amber-100">
+                                      {activeSubTasks.map((st, si) => {
+                                        const stHasTimer = st.timerStartedAt && st.durationMinutes;
+                                        return (
+                                          <div key={st.id} className={`rounded-lg px-2.5 py-2 border text-xs ${stHasTimer ? 'border-amber-200 bg-amber-50' : 'border-slate-100 bg-white'}`}>
+                                            <div className="flex items-center gap-1.5">
+                                              <div className="w-4 h-4 rounded-full bg-amber-100 text-amber-700 font-bold flex items-center justify-center flex-shrink-0">
+                                                {String.fromCharCode(97 + si)}
+                                              </div>
+                                              <span className="font-medium text-slate-700">{st.title}</span>
+                                              {st.assignedUser && <span className="text-slate-400 ml-1">({st.assignedUser.name})</span>}
+                                            </div>
+                                            {stHasTimer && (
+                                              <div className="mt-1 flex items-center gap-2 text-amber-700 ml-6">
+                                                <Timer size={11} />
+                                                <span>Started {new Date(st.timerStartedAt!).toLocaleTimeString()} · {st.durationMinutes}min</span>
+                                              </div>
+                                            )}
+                                            <div className="mt-1.5 flex items-center gap-1.5 flex-wrap ml-6">
+                                              {stHasTimer ? (
+                                                <button
+                                                  onClick={() => handleResetSubTaskTimer(step.id, st.id)}
+                                                  className="text-xs px-2 py-0.5 border border-red-300 text-red-600 rounded-md hover:bg-red-50"
+                                                >
+                                                  Clear
+                                                </button>
+                                              ) : (
+                                                [1, 15, 30, 45, 60, 90].map(m => (
+                                                  <button
+                                                    key={m}
+                                                    onClick={() => handleSetSubTaskTimer(step.id, st.id, m)}
+                                                    className="text-xs px-1.5 py-0.5 border border-slate-300 text-slate-600 rounded-md hover:border-amber-400 hover:text-amber-600 hover:bg-amber-50"
+                                                  >
+                                                    {m >= 60 ? `${m / 60}h` : `${m}m`}
+                                                  </button>
+                                                ))
+                                              )}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                   )}
-                                  <div className="mt-2 flex items-center gap-2 flex-wrap">
-                                    {hasTimer ? (
-                                      <button
-                                        onClick={() => handleResetTimer(step.id)}
-                                        className="text-xs px-2.5 py-1 border border-red-300 text-red-600 rounded-lg hover:bg-red-50"
-                                      >
-                                        Clear Timer
-                                      </button>
-                                    ) : (
-                                      [1, 15, 30, 45, 60, 90, 120].map(m => (
-                                        <button
-                                          key={m}
-                                          onClick={() => handleSetTimer(step.id, m)}
-                                          className="text-xs px-2.5 py-1 border border-slate-300 text-slate-600 rounded-lg hover:border-amber-400 hover:text-amber-600 hover:bg-amber-50"
-                                        >
-                                          {m >= 60 ? `${m / 60}h` : `${m}m`}
-                                        </button>
-                                      ))
-                                    )}
-                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -493,23 +642,71 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
               <h3 className="font-semibold text-slate-800 mb-3">Team Assigned</h3>
               <div className="space-y-2.5">
-                {job.workflowSteps.filter(s => s.assignedUser).map(s => (
-                  <div key={s.id} className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
-                      {s.stepNumber}
+                {job.workflowSteps.map(s => {
+                  const hasSubTasks = s.subTasks && s.subTasks.length > 0;
+
+                  if (hasSubTasks) {
+                    // Show each sub-task worker under this step
+                    return (
+                      <div key={s.id}>
+                        {/* Step label */}
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <div className="w-7 h-7 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                            {s.stepNumber}
+                          </div>
+                          <p className="text-xs font-semibold text-slate-500 truncate">{s.name}</p>
+                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ml-auto ${
+                            s.status === 'COMPLETED' ? 'bg-green-400' :
+                            s.status === 'IN_PROGRESS' || s.status === 'NOTIFIED' ? 'bg-amber-400' :
+                            s.status === 'ISSUE' ? 'bg-red-400' : 'bg-slate-200'
+                          }`} />
+                        </div>
+                        {/* Sub-task workers */}
+                        <div className="pl-9 space-y-1.5">
+                          {s.subTasks!.map((st, si) => (
+                            <div key={st.id} className="flex items-center gap-2">
+                              <div className="w-5 h-5 rounded-full bg-slate-100 text-slate-500 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                                {String.fromCharCode(97 + si)}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                {st.assignedUser ? (
+                                  <p className="text-xs font-medium text-slate-700 truncate">{st.assignedUser.name}</p>
+                                ) : (
+                                  <p className="text-xs text-slate-400 italic truncate">Unassigned</p>
+                                )}
+                                <p className="text-xs text-slate-400 truncate">{st.title}</p>
+                              </div>
+                              <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                st.status === 'COMPLETED' ? 'bg-green-400' :
+                                st.status === 'NOTIFIED' ? 'bg-amber-400' : 'bg-slate-200'
+                              }`} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (!s.assignedUser) return null;
+
+                  return (
+                    <div key={s.id} className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                        {s.stepNumber}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-700 truncate">{s.assignedUser.name}</p>
+                        <p className="text-xs text-slate-400">{s.name}</p>
+                      </div>
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                        s.status === 'COMPLETED' ? 'bg-green-400' :
+                        s.status === 'IN_PROGRESS' || s.status === 'NOTIFIED' ? 'bg-amber-400' :
+                        s.status === 'ISSUE' ? 'bg-red-400' : 'bg-slate-200'
+                      }`} />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-700 truncate">{s.assignedUser!.name}</p>
-                      <p className="text-xs text-slate-400">{s.name}</p>
-                    </div>
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                      s.status === 'COMPLETED' ? 'bg-green-400' :
-                      s.status === 'IN_PROGRESS' || s.status === 'NOTIFIED' ? 'bg-amber-400' :
-                      s.status === 'ISSUE' ? 'bg-red-400' : 'bg-slate-200'
-                    }`} />
-                  </div>
-                ))}
-                {job.workflowSteps.filter(s => s.assignedUser).length === 0 && (
+                  );
+                })}
+                {job.workflowSteps.every(s => !s.assignedUser && (!s.subTasks || s.subTasks.length === 0)) && (
                   <p className="text-xs text-slate-400">No workers assigned yet</p>
                 )}
               </div>

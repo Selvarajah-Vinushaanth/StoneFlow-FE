@@ -9,7 +9,10 @@ export type WsEvent =
   | 'step_help'
   | 'issue_resolved'
   | 'timer_expired'
-  | 'job_completed';
+  | 'job_completed'
+  | 'subtask_issue'
+  | 'subtask_help'
+  | 'subtask_timer_expired';
 
 export interface WsMessage {
   event: WsEvent;
