@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, Plus, Trash2, ChevronDown, Save, Eye, Play,
   Briefcase, User, Calendar, AlertCircle, CheckCircle2, GitBranch,
-  GripVertical, ChevronUp, ListChecks,
+  GripVertical, ChevronUp, ListChecks, Layers, FolderKanban,
 } from 'lucide-react';
 import { jobsApi, usersApi, api, User as UserType } from '@/lib/api';
 
@@ -65,6 +65,16 @@ function NewJobContent() {
   const [priority, setPriority]         = useState('NORMAL');
   const [notes, setNotes]               = useState('');
 
+  // Project hierarchy (set from URL params)
+  const [projectId, setProjectId]           = useState('');
+  const [projectName, setProjectName]       = useState('');
+  const [parentJobId, setParentJobId]       = useState('');
+  const [parentJobTitle, setParentJobTitle] = useState('');
+  const [levelName, setLevelName]           = useState('');
+  const [unitNumber, setUnitNumber]         = useState('');
+  const [projectLevelId, setProjectLevelId] = useState('');
+  const [levelDisplayName, setLevelDisplayName] = useState('');
+
   // Steps
   const [steps, setSteps] = useState<StepForm[]>(
     DEFAULT_STEPS.map((s, i) => ({ ...s, stepNumber: i + 1 }))
@@ -74,6 +84,34 @@ function NewJobContent() {
     usersApi.list()
       .then(res => setUsers(res.data.data))
       .catch(() => setUsers([]));
+
+    // Project / level context from URL params
+    const pid = searchParams.get('projectId');
+    if (pid) {
+      setProjectId(pid);
+      api.get<{ data: { name: string } }>(`/projects/${pid}`)
+        .then(res => setProjectName(res.data.data.name))
+        .catch(() => {});
+    }
+    const levelId = searchParams.get('levelId');
+    if (levelId) {
+      setProjectLevelId(levelId);
+      const ln = searchParams.get('levelName');
+      setLevelDisplayName(ln ? decodeURIComponent(ln) : levelId);
+    }
+    const parentId = searchParams.get('parentId');
+    if (parentId) {
+      setParentJobId(parentId);
+      api.get<{ data: { title: string; levelName?: string } }>(`/jobs/${parentId}`)
+        .then(res => {
+          setParentJobTitle(res.data.data.levelName ?? res.data.data.title);
+        })
+        .catch(() => {});
+    }
+    const cn = searchParams.get('clientName');
+    if (cn) setClientName(decodeURIComponent(cn));
+    const cp = searchParams.get('clientPhone');
+    if (cp) setClientPhone(decodeURIComponent(cp));
 
     const templateId = searchParams.get('templateId');
     if (templateId) {
@@ -145,6 +183,9 @@ function NewJobContent() {
     if (!title || !clientName || !deadline) {
       setError('Job title, client name, and deadline are required.'); return false;
     }
+    if (projectId && !parentJobId && !levelName) {
+      setError('Level name is required when adding a level to a project.'); return false;
+    }
     setError(''); return true;
   };
 
@@ -154,6 +195,11 @@ function NewJobContent() {
       const payload = {
         title, clientName, clientPhone, description, measurements,
         material, color, startDate: startDate || undefined, deadline, priority, notes,
+        ...(projectId && { projectId }),
+        ...(parentJobId && { parentJobId }),
+        ...(projectLevelId && { projectLevelId }),
+        ...(levelName && { levelName }),
+        ...(unitNumber && { unitNumber }),
         steps: steps.filter(s => s.name.trim()).map(s => ({
           ...s,
           assignedUserId: s.assignedUserId || undefined,
@@ -186,12 +232,33 @@ function NewJobContent() {
     <div className="flex flex-col flex-1 min-h-0">
       {/* Header */}
       <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center gap-4">
-        <Link href="/jobs" className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+        <Link
+          href={projectId ? `/projects/${projectId}` : '/jobs'}
+          className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+        >
           <ArrowLeft size={18} />
         </Link>
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Create New Job</h1>
-          <p className="text-sm text-slate-500">Fill in details, assign workflow steps, then start</p>
+          <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+            {projectLevelId ? (
+              <><Layers size={18} className="text-violet-500" /> Add Unit</>
+            ) : parentJobId ? (
+              <><Layers size={18} className="text-violet-500" /> Create Unit Job</>
+            ) : projectId ? (
+              <><FolderKanban size={18} className="text-violet-500" /> Add Level</>
+            ) : (
+              'Create New Job'
+            )}
+          </h1>
+          <p className="text-sm text-slate-500">
+            {projectLevelId
+              ? `Unit for: ${levelDisplayName} · ${projectName || ''}`
+              : parentJobId
+              ? `Unit job under: ${parentJobTitle || '…'} · ${projectName || ''}`
+              : projectId
+              ? `Level job for project: ${projectName || '…'}`
+              : 'Fill in details, assign workflow steps, then start'}
+          </p>
         </div>
       </div>
 
@@ -230,8 +297,66 @@ function NewJobContent() {
           {step === 'details' && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5 animate-fade-in">
               <h2 className="font-bold text-slate-800 text-lg flex items-center gap-2">
-                <Briefcase size={18} className="text-amber-500" /> Job Details
+                <Briefcase size={18} className="text-amber-500" />
+                {parentJobId || projectLevelId ? 'Unit Job Details' : projectId ? 'Level Job Details' : 'Job Details'}
               </h2>
+
+              {/* Project / level context banner */}
+              {(projectId || parentJobId || projectLevelId) && (
+                <div className="flex flex-col gap-1.5 px-4 py-3 bg-violet-50 border border-violet-200 rounded-xl text-sm">
+                  {projectId && (
+                    <span className="flex items-center gap-2 text-violet-700">
+                      <FolderKanban size={14} className="flex-shrink-0" />
+                      Project: <strong>{projectName || projectId}</strong>
+                    </span>
+                  )}
+                  {projectLevelId && (
+                    <span className="flex items-center gap-2 text-violet-600">
+                      <Layers size={14} className="flex-shrink-0" />
+                      Level: <strong>{levelDisplayName}</strong>
+                    </span>
+                  )}
+                  {parentJobId && !projectLevelId && (
+                    <span className="flex items-center gap-2 text-violet-600">
+                      <Layers size={14} className="flex-shrink-0" />
+                      Level: <strong>{parentJobTitle || parentJobId}</strong>
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Unit Name / Level Name field */}
+              {projectId && !parentJobId && (
+                <div className="grid grid-cols-2 gap-4 px-4 py-3 bg-violet-50/60 border border-violet-100 rounded-xl">
+                  <div>
+                    <label className="block text-xs font-semibold text-violet-700 mb-1.5">
+                      {projectLevelId ? 'Unit Name *' : 'Level Name *'}
+                    </label>
+                    <input
+                      value={levelName} onChange={e => setLevelName(e.target.value)}
+                      placeholder={projectLevelId ? 'e.g. Unit A, Room 101, Kitchen' : 'e.g. Level 1, Ground Floor, Block A'}
+                      className="w-full px-3 py-2.5 border border-violet-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white"
+                    />
+                    <p className="text-xs text-violet-400 mt-1">
+                      {projectLevelId ? 'Name for this unit within the level' : 'Groups units together under this level'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Unit Number (shown when adding a unit to a level) */}
+              {parentJobId && (
+                <div className="grid grid-cols-2 gap-4 px-4 py-3 bg-violet-50/60 border border-violet-100 rounded-xl">
+                  <div>
+                    <label className="block text-xs font-semibold text-violet-700 mb-1.5">Unit Number</label>
+                    <input
+                      value={unitNumber} onChange={e => setUnitNumber(e.target.value)}
+                      placeholder="e.g. Unit 1, A-05"
+                      className="w-full px-3 py-2.5 border border-violet-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 bg-white"
+                    />
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">Job Title *</label>

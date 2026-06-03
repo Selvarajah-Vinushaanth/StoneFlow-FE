@@ -28,6 +28,7 @@ export type Role =
 export type Language = 'ENGLISH' | 'BANGLA' | 'MANDARIN' | 'BAHASA_MALAY' | 'TAMIL';
 export type JobStatus = 'PENDING' | 'IN_PROGRESS' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
 export type Priority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+export type ProjectStatus = 'PLANNING' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED';
 export type StepStatus =
   | 'WAITING' | 'NOTIFIED' | 'IN_PROGRESS' | 'ISSUE' | 'HELP_NEEDED' | 'COMPLETED' | 'SKIPPED';
 
@@ -98,9 +99,48 @@ export interface Job {
   notes?: string;
   createdAt: string;
   completedAt?: string;
+  // Project hierarchy
+  projectId?: string | null;
+  parentJobId?: string | null;
+  levelName?: string | null;
+  unitNumber?: string | null;
+  projectLevelId?: string | null;
+  project?: { id: string; projectNumber: string; name: string } | null;
+  parent?: { id: string; jobNumber: string; title: string } | null;
+  subJobs?: Job[];
   workflowSteps: WorkflowStep[];
   auditLogs?: AuditLog[];
-  _count?: { photos: number; messages: number };
+  _count?: { photos: number; messages: number; subJobs?: number };
+}
+
+export interface ProjectLevel {
+  id: string;
+  projectId: string;
+  name: string;
+  order: number;
+  createdAt: string;
+  jobs: Job[];
+}
+
+export interface Project {
+  id: string;
+  projectNumber: string;
+  name: string;
+  clientName: string;
+  clientPhone?: string;
+  description?: string;
+  location?: string;
+  status: ProjectStatus;
+  startDate?: string | null;
+  deadline?: string | null;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  levelCount?: number;
+  totalUnits?: number;
+  _count?: { levels?: number; jobs?: number };
+  jobs?: Job[];
+  levels?: ProjectLevel[];
 }
 
 export interface AuditLog {
@@ -193,6 +233,27 @@ export const messagesApi = {
     api.get<{ success: boolean; data: unknown[] }>('/messages', { params }),
   byJob: (jobId: string) =>
     api.get<{ success: boolean; data: unknown[] }>(`/messages/job/${jobId}`),
+};
+
+export const projectsApi = {
+  list: (params?: Record<string, string>) =>
+    api.get<{ success: boolean; data: Project[] }>('/projects', { params }),
+  get: (id: string) =>
+    api.get<{ success: boolean; data: Project }>(`/projects/${id}`),
+  create: (data: Record<string, unknown>) =>
+    api.post<{ success: boolean; data: Project }>('/projects', data),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.put<{ success: boolean; data: Project }>(`/projects/${id}`, data),
+  delete: (id: string) => api.delete(`/projects/${id}`),
+  // Level management
+  addLevel: (projectId: string, name: string) =>
+    api.post<{ success: boolean; data: ProjectLevel }>(`/projects/${projectId}/levels`, { name }),
+  updateLevel: (projectId: string, levelId: string, data: { name?: string; order?: number }) =>
+    api.put<{ success: boolean; data: ProjectLevel }>(`/projects/${projectId}/levels/${levelId}`, data),
+  deleteLevel: (projectId: string, levelId: string) =>
+    api.delete(`/projects/${projectId}/levels/${levelId}`),
+  start: (projectId: string, jobIds?: string[]) =>
+    api.post<{ success: boolean; data: { started: number; total: number } }>(`/projects/${projectId}/start`, jobIds ? { jobIds } : {}),
 };
 
 export const whatsappApi = {

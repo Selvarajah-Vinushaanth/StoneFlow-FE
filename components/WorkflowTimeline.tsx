@@ -537,14 +537,31 @@ export default function WorkflowTimeline({ steps, onCompleteStep, onSetTimer, on
                     <RaiseIssuePanel step={step} onRaiseIssue={onRaiseIssue} />
                   )}
                 </div>
-                {isAdmin && (step.status === 'IN_PROGRESS' || step.status === 'NOTIFIED') && onCompleteStep && (
-                  <button
-                    onClick={() => onCompleteStep(step.id)}
-                    className="text-xs px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex-shrink-0"
-                  >
-                    Mark Done
-                  </button>
-                )}
+                {isAdmin && (step.status === 'IN_PROGRESS' || step.status === 'NOTIFIED') && onCompleteStep && (() => {
+                  const pendingSubTasks = (step.subTasks ?? []).filter(st => st.status !== 'COMPLETED');
+                  const blocked = pendingSubTasks.length > 0;
+                  return (
+                    <div className="flex flex-col items-end gap-1">
+                      {blocked && (
+                        <p className="text-[10px] text-amber-600 font-medium">
+                          {pendingSubTasks.length} sub-task{pendingSubTasks.length !== 1 ? 's' : ''} pending
+                        </p>
+                      )}
+                      <button
+                        onClick={() => !blocked && onCompleteStep(step.id)}
+                        disabled={blocked}
+                        title={blocked ? `Complete all ${pendingSubTasks.length} sub-task(s) first` : 'Mark step as done'}
+                        className={`text-xs px-3 py-1.5 rounded-lg font-medium flex-shrink-0 transition-colors ${
+                          blocked
+                            ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                            : 'bg-green-600 text-white hover:bg-green-700'
+                        }`}
+                      >
+                        Mark Done
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>

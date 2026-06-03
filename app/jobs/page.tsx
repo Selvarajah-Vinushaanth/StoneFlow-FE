@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   Briefcase, Plus, Search, Filter, Calendar, ArrowRight, ChevronDown,
-  CheckCircle2, Clock, PlayCircle, AlertTriangle, Trash2, MoreVertical, WifiOff, RefreshCw,
+  CheckCircle2, Clock, PlayCircle, AlertTriangle, Trash2, MoreVertical, WifiOff, RefreshCw, FolderKanban,
 } from 'lucide-react';
 import { jobsApi, Job, JobStatus, Priority } from '@/lib/api';
 import Header from '@/components/Header';
@@ -226,6 +226,17 @@ function JobsContent() {
                         {job.title}
                       </Link>
                       <p className="text-xs text-slate-400">{job.jobNumber} · {job.material || '—'}</p>
+                      {job.project && (
+                        <Link
+                          href={`/projects/${job.project.id}`}
+                          onClick={e => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-md bg-violet-50 border border-violet-100 text-violet-600 text-[10px] font-medium hover:bg-violet-100 transition-colors max-w-full"
+                        >
+                          <FolderKanban size={9} className="flex-shrink-0" />
+                          <span className="truncate">{job.project.name}</span>
+                          {job.levelName && <span className="text-violet-400 flex-shrink-0">· {job.levelName}</span>}
+                        </Link>
+                      )}
                     </div>
                   </div>
 

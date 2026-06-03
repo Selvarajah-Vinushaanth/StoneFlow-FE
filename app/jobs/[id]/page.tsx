@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, Play, RefreshCw, Clock, CheckCircle2, AlertTriangle,
   Phone, User, Calendar, Layers, Camera, MessageSquare, Briefcase,
-  ChevronRight, HelpCircle, Timer,
+  ChevronRight, HelpCircle, Timer, FolderKanban,
 } from 'lucide-react';
 import { jobsApi, Job, AuditLog } from '@/lib/api';
 import { StatusBadge, PriorityBadge } from '@/components/Badges';
@@ -340,6 +340,14 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          {job.project && (
+            <Link
+              href={`/projects/${job.project.id}`}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-violet-600 bg-violet-50 border border-violet-100 hover:bg-violet-100 transition-colors"
+            >
+              <FolderKanban size={14} /> {job.project.name}
+            </Link>
+          )}
           <button
             onClick={load}
             className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"

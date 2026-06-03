@@ -15,10 +15,12 @@ import {
   Bell,
   DollarSign,
   Timer,
+  FolderKanban,
 } from 'lucide-react';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/projects', label: 'Projects', icon: FolderKanban },
   { href: '/jobs', label: 'Jobs', icon: Briefcase },
   { href: '/alerts', label: 'Alerts', icon: Bell, alertBadge: true },
   { href: '/users', label: 'Team', icon: Users },
