@@ -8,10 +8,11 @@ import AlertNotifier from './AlertNotifier';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isAuthPage = pathname.startsWith('/sign-in');
+  // Standalone pages render without the admin chrome (sidebar/notifier).
+  const isStandalonePage = ['/sign-in', '/privacy', '/terms'].some((p) => pathname.startsWith(p));
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  if (isAuthPage) {
+  if (isStandalonePage) {
     return <>{children}</>;
   }
 
