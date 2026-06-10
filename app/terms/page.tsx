@@ -88,7 +88,7 @@ export default function TermsOfService() {
           <p className="text-sm text-gray-600 leading-relaxed">
             Stone Co Sdn Bhd
             <br />
-            Email: support@stoneco.example
+            Email: nexacode.ai@gmail.com
           </p>
         </section>
       </div>
